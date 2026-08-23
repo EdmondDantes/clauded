@@ -72,6 +72,32 @@ class State:
         self.resolved = {}
         self.applied = None
         self.focus = None
+        self.listeners = 0
+        # Every message gets an id unique across restarts, so a page that
+        # remembers more than the server does can still tell what is new.
+        self.origin = str(int(time.time()))
+        self.counter = 0
+        self._restore()
+
+    def _restore(self):
+        """Brings back the conversation a previous run of the server held."""
+        saved = self.root / STATE_DIR / "state.json"
+        if not saved.is_file():
+            return
+
+        try:
+            data = json.loads(saved.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return
+
+        self.chat = [m for m in data.get("chat", []) if isinstance(m, dict)]
+        # A message saved before ids existed still needs one: without it the
+        # page treats the same reply as new on every poll.
+        for index, message in enumerate(self.chat, start=1):
+            message.setdefault("id", f"restored-{index}")
+        self.counter = len(self.chat)
+        self.resolved = data.get("resolved") or {}
+        self.applied = data.get("applied")
 
     def snapshot(self):
         with self.lock:
@@ -79,6 +105,7 @@ class State:
                 "version": self.version,
                 "selection": self.selection,
                 "chat": list(self.chat),
+                "listeners": self.listeners,
                 "resolved": dict(self.resolved),
                 "applied": self.applied,
                 "focus": self.focus,
@@ -92,6 +119,16 @@ class State:
         """
         end = None if timeout is None else time.monotonic() + timeout
 
+        with self.lock:
+            self.listeners += 1
+
+        try:
+            return self._wait_loop(test, end)
+        finally:
+            with self.lock:
+                self.listeners -= 1
+
+    def _wait_loop(self, test, end):
         with self.lock:
             while True:
                 found = test(self.snapshot())
@@ -114,14 +151,16 @@ class State:
         `about` is the node selected when the line was written — the subject, not
         a separate thread: one chat is easier to follow than a dozen.
         """
-        message = {
-            "role": role,
-            "text": text,
-            "about": about,
-            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        }
-
         with self.lock:
+            self.counter += 1
+            message = {
+                "id": f"{self.origin}-{self.counter}",
+                "role": role,
+                "text": text,
+                "about": about,
+                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            }
+
             self.chat.append(message)
             # An answer settles the question Claude pointed at, so the pointer
             # goes away and the page stops showing it as waited on.
@@ -197,6 +236,7 @@ class Handler(BaseHTTPRequestHandler):
             snapshot = state.snapshot()
             self.json_reply(200, {
                 "build": mapkit.build_stamp(),
+                "listening": snapshot["listeners"] > 0,
                 "focus": snapshot["focus"],
                 "resolved": snapshot["resolved"],
                 "replies": state.replies_for_page(),

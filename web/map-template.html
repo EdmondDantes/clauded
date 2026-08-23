@@ -1242,6 +1242,7 @@ let edgeShapes = [];
 let nodeShapes = new Map();
 let selected = null;
 let waiting = null;
+let listening = false;
 const settled = new Map();
 const unread = new Set();
 
@@ -1680,10 +1681,15 @@ function renderChatSubject() {
   const options = document.getElementById("chatOptions");
   const node = selected ? byId.get(selected) : null;
 
-  about.textContent = node
-    ? (waiting && waiting.node === node.id ? "Claude is waiting: " : "About: ") + node.title
-    : "About the map — pick a node to change the subject";
-  about.style.color = node && waiting && waiting.node === node.id ? "var(--open)" : "";
+  const subject = node ? node.title : "the map";
+  const state = waiting && node && waiting.node === node.id
+    ? "Claude ждёт ответа"
+    : listening ? "Claude слушает" : "Claude сейчас не слушает — сообщение подождёт";
+
+  about.textContent = `${state} · тема: ${subject}`;
+  about.style.color = waiting && node && waiting.node === node.id
+    ? "var(--open)"
+    : listening ? "var(--decided)" : "var(--ink-muted)";
 
   options.textContent = "";
   for (const option of (node && node.options) || []) {
@@ -2208,18 +2214,25 @@ if (location.protocol === "http:" || location.protocol === "https:") {
         return;
       }
 
+      // Match by id, not by count: the page keeps its own history and the
+      // server starts a fresh one, so counting made a new reply look old.
       const replies = news.replies || [];
-      const known = pending.chat.filter(message => message.role === "claude").length;
-      if (replies.length > known) {
-        for (const reply of replies.slice(known)) {
-          pending.chat.push({ role: "claude", text: reply.text, about: reply.about, at: reply.at });
+      const known = new Set(pending.chat.map(message => message.id).filter(Boolean));
+      const fresh = replies.filter(reply => !reply.id || !known.has(reply.id));
+
+      if (fresh.length) {
+        for (const reply of fresh) {
+          pending.chat.push({ id: reply.id, role: "claude", text: reply.text, about: reply.about, at: reply.at });
         }
 
         savePending();
         renderChat();
-        const last = replies[replies.length - 1];
+        const last = fresh[fresh.length - 1];
         if (last.about && byId.has(last.about) && selected !== last.about) select(last.about);
       }
+
+      listening = Boolean(news.listening);
+      renderChatSubject();
 
       for (const [id, mark] of Object.entries(news.resolved || {})) {
         if (settled.has(id)) continue;
