@@ -290,6 +290,13 @@ def handle(session, message):
     request_id = message.get("id")
 
     if method == "initialize":
+        # Start the map server at once: the Stop hook looks up its address in a
+        # file, and until something has started it, there is nothing to look up.
+        try:
+            session.ensure()
+        except OSError:
+            pass
+
         # Echo the client's protocol revision when it names one: the client
         # picks the dialect, and this server speaks nothing revision-specific.
         asked = (message.get("params") or {}).get("protocolVersion")
