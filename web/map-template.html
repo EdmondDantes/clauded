@@ -679,7 +679,9 @@
   }
 
   .mode-toggle:hover, .mode-toggle:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
-  .node:focus-visible { outline: none; }
+  /* Chrome draws its own ring around a focused SVG group, on a click as well
+     as on Tab; the keyboard ring below replaces it. */
+  .node:focus { outline: none; }
   .node:focus-visible .plate { stroke: var(--aspect-color, var(--accent)); stroke-width: 2.5; }
 
   .node.selected .plate { stroke: var(--aspect-color, var(--accent)); stroke-width: 2; }
@@ -691,8 +693,11 @@
     background: var(--surface);
     padding: 1.25rem;
     overflow-y: auto;
+    overflow-x: hidden;
     min-height: 0;
   }
+
+  aside .refs button, aside .origin { max-width: 100%; }
 
 
 
@@ -1364,6 +1369,7 @@ function select(id) {
 
   renderPanel(byId.get(id), [...lit].filter(other => other !== id));
   document.body.classList.add("panel-open");
+  bringIntoView(byId.get(id));
   window.mapBridge?.select(id);
 }
 
@@ -1860,6 +1866,21 @@ function renderQA() {
   actions.append(back, next, toMap);
   card.append(actions);
   box.append(card);
+}
+
+/**
+ * On a phone the record slides up over the graph and leaves a band at the top;
+ * the chosen node is moved into that band, or it would sit behind the sheet.
+ * On a wide screen the panel takes its own column and nothing has to move.
+ */
+function bringIntoView(node) {
+  const rect = svg.getBoundingClientRect();
+  if (rect.width >= 640 || !node) return;
+
+  const band = rect.height * 0.34;
+  offsetX = rect.width / 2 - (node.x + NODE_W / 2) * scale;
+  offsetY = band / 2 - (node.y + NODE_H / 2) * scale;
+  applyTransform();
 }
 
 // View transform: wheel zooms around the pointer, drag pans, Fit frames the graph.
