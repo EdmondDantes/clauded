@@ -716,7 +716,9 @@
 
   .side {
     display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
+    /* The record scrolls in what is left; the conversation keeps a floor, or a
+       long record squeezes it down to a couple of lines. */
+    grid-template-rows: minmax(0, 1fr) minmax(15rem, auto);
     border-left: 1px solid var(--line);
     background: var(--surface);
     min-height: 0;
@@ -733,20 +735,20 @@
 
   .chat {
     display: grid;
+    grid-template-rows: minmax(0, 1fr) auto auto auto;
     gap: .5rem;
     padding: .75rem 1rem 1rem;
     border-top: 1px solid var(--line-strong);
     background: var(--surface-sunk);
-    max-height: 55%;
     min-height: 0;
   }
 
   .chat-log {
     display: grid;
     gap: .4rem;
+    align-content: start;
     overflow-y: auto;
-    min-height: 4rem;
-    max-height: 20rem;
+    min-height: 0;
   }
 
   .chat-log:empty::before {
@@ -758,6 +760,7 @@
   .chat-about {
     font-family: "IBM Plex Mono", monospace;
     font-size: .6875rem;
+    line-height: 1.4;
     letter-spacing: .06em;
     color: var(--ink-muted);
     overflow: hidden;
@@ -867,9 +870,9 @@
       grid-template-rows: auto auto;
     }
 
-    .side .panel { max-height: 46dvh; padding: 1rem 1rem .5rem; display: none; }
+    .side { grid-template-rows: auto minmax(0, auto); }
+    .side .panel { max-height: 42dvh; padding: 1rem 1rem .5rem; display: none; }
     body.panel-open .side .panel { display: block; }
-    .chat { max-height: none; }
     .chat-log { max-height: 26dvh; }
     body.panel-open .toolbar { display: none; }
 
