@@ -1,0 +1,55 @@
+---
+name: map
+description: Build or rebuild an interactive design or architecture map from the project's own records and open it. Use when asked for a map, a decision graph, or a picture of what is decided and what is still open — and when a design discussion has collected more open questions than fit in a chat reply.
+---
+
+# Build a map
+
+A map is derived: it holds nothing that is not written in the project. Build it
+from `dev/DECISIONS.md`, `dev/PLAN.md` (`## Fog` and `Decide` steps) and
+`dev/ARCHITECTURE.md`, and rebuild it rather than editing the page.
+
+## Steps
+
+1. **Read the sources whole.** A grep gives a map with holes, and a hole reads
+   as a decision nobody made.
+2. **Write `dev/design/<name>.map.yaml`.** One node per record, with `id`,
+   `kind`, `title`, `body` and `origin` — the file and place the record came
+   from. Add `why`, `cost` and `status` when the source has them, `options` when
+   a question has named alternatives, and `refs` to cite source files:
+
+   ```yaml
+   refs:
+     - file: src/Auth/Guard.php
+       lines: 12-40
+   ```
+
+3. **Edges only where the source states them.** A connection you can see but
+   nobody wrote down belongs in `## Fog`, not on the map.
+4. **Build:**
+
+   ```
+   python3 ${CLAUDE_PLUGIN_ROOT}/tools/build-map.py dev/design/<name>.map.yaml --root .
+   ```
+
+   The build fails on a missing field, a repeated id, a dangling edge or a cited
+   file that is not there. Fix the YAML, not the page.
+
+5. **Commit both files** and tell Edmond the path. Publishing the page as an
+   artifact is his call, not yours.
+
+## Vocabularies
+
+| Map | Node kinds |
+|---|---|
+| design | `aspect`, `question`, `decision`, `rejected` |
+| architecture | `aspect`, `module`, `knowledge`, `dependency` |
+
+An aspect groups nodes, gives them their colour, and can be hidden with its
+whole subtree.
+
+## What the map is for
+
+Questions collected on the map are questions Claude has not acted on. The page
+holds the answers until Apply is pressed; until then the work has not started.
+This is rule 18 — one question at a time — with the map as its board.

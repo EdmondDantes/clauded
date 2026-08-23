@@ -1,0 +1,1958 @@
+<title>Clauded — design map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef0f3;
+    --surface: #ffffff;
+    --surface-sunk: #f7f8fa;
+    --ink: #15181d;
+    --ink-muted: #5b6270;
+    --line: #d5d9e0;
+    --line-strong: #b6bcc7;
+    --accent: #2b4ea2;
+    --accent-soft: #dbe2f4;
+    --open: #9a6410;
+    --open-soft: #f6e8cf;
+    --decided: #16705a;
+    --decided-soft: #d6ebe4;
+    --rejected: #8c4a4a;
+    --rejected-soft: #f0dcdc;
+    --aspect-1: #3450a8;
+    --aspect-2: #12665f;
+    --aspect-3: #7a3f83;
+    --shadow: 0 1px 2px rgba(21, 24, 29, .07), 0 8px 24px rgba(21, 24, 29, .06);
+
+    --step-0: .8125rem;
+    --step-1: .9375rem;
+    --step-2: 1.0625rem;
+    --step-3: 1.375rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #131519;
+      --surface: #1a1d23;
+      --surface-sunk: #16191e;
+      --ink: #e6e9ee;
+      --ink-muted: #98a1b0;
+      --line: #2a2f38;
+      --line-strong: #3d444f;
+      --accent: #86a6f2;
+      --accent-soft: #22304d;
+      --open: #d7a445;
+      --open-soft: #362b16;
+      --decided: #55c2a0;
+      --decided-soft: #14322a;
+      --rejected: #cb8888;
+      --rejected-soft: #37211f;
+      --aspect-1: #8ba7f2;
+      --aspect-2: #4fb8ae;
+      --aspect-3: #c48fd2;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px rgba(0, 0, 0, .35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #131519;
+    --surface: #1a1d23;
+    --surface-sunk: #16191e;
+    --ink: #e6e9ee;
+    --ink-muted: #98a1b0;
+    --line: #2a2f38;
+    --line-strong: #3d444f;
+    --accent: #86a6f2;
+    --accent-soft: #22304d;
+    --open: #d7a445;
+    --open-soft: #362b16;
+    --decided: #55c2a0;
+    --decided-soft: #14322a;
+    --rejected: #cb8888;
+    --rejected-soft: #37211f;
+    --aspect-1: #8ba7f2;
+    --aspect-2: #4fb8ae;
+    --aspect-3: #c48fd2;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px rgba(0, 0, 0, .35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: var(--step-1);
+    line-height: 1.5;
+    overflow: hidden;
+  }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    padding: .75rem 1.25rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  h1 {
+    margin: 0;
+    font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+    font-size: var(--step-2);
+    font-weight: 600;
+    letter-spacing: .01em;
+  }
+
+  .source {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step-0);
+    color: var(--ink-muted);
+  }
+
+  .tally {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: var(--step-0);
+    color: var(--ink-muted);
+  }
+
+  .tally .count {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tally .count b {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .tally .count::before {
+    content: "";
+    width: .55rem;
+    height: .55rem;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .tally .count.open { color: var(--open); }
+  .tally .count.decided { color: var(--decided); }
+  .tally .count.rejected { color: var(--rejected); }
+
+  .tally .progress {
+    width: 5rem;
+    height: .35rem;
+    border-radius: 2px;
+    background: var(--open-soft);
+    overflow: hidden;
+  }
+
+  .tally .progress i {
+    display: block;
+    height: 100%;
+    background: var(--decided);
+  }
+
+  .legend {
+    margin-left: auto;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    font-size: var(--step-0);
+    color: var(--ink-muted);
+  }
+
+  .legend span { display: inline-flex; align-items: center; gap: .4rem; }
+
+  .swatch { width: .7rem; height: .7rem; border: 1.5px solid currentColor; }
+  .swatch.aspect { border-radius: 2px; color: var(--accent); background: var(--accent-soft); }
+  .swatch.question { transform: rotate(45deg); color: var(--open); background: var(--open-soft); }
+  .swatch.decision { border-radius: 50%; color: var(--decided); background: var(--decided-soft); }
+  .swatch.rejected { border-radius: 50%; color: var(--rejected); background: var(--rejected-soft); border-style: dashed; }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    min-height: 0;
+  }
+
+  @media (max-width: 52rem) {
+    main { grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr auto; }
+    aside { max-height: 45vh; }
+  }
+
+  #canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: grab;
+    touch-action: none;
+    background:
+      radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 0) 0 0 / 28px 28px;
+  }
+
+  #canvas.dragging { cursor: grabbing; }
+
+  .edge {
+    fill: none;
+    stroke: var(--edge-color, var(--line-strong));
+    stroke-width: 1.5;
+    opacity: .8;
+  }
+  .edge.rejects { stroke-dasharray: 4 3; }
+  .edge.lit { stroke-width: 2.5; opacity: 1; }
+
+  .node { cursor: pointer; }
+  .node .plate {
+    fill: var(--surface);
+    stroke: var(--line-strong);
+    stroke-width: 1;
+    rx: 5;
+  }
+  .node .title { font-size: 13px; fill: var(--ink); }
+  .node .kind {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: .08em;
+    fill: var(--ink-muted);
+  }
+  .node .mark { stroke-width: 1.5; }
+
+  .node[data-kind="aspect"] .plate {
+    fill: color-mix(in srgb, var(--aspect-color, var(--accent)) 12%, var(--surface));
+    stroke: var(--aspect-color, var(--accent));
+    stroke-width: 1.75;
+  }
+  .node[data-kind="aspect"] .mark {
+    fill: var(--aspect-color, var(--accent));
+    stroke: var(--aspect-color, var(--accent));
+  }
+  .node[data-kind="question"] .mark { fill: var(--open-soft); stroke: var(--open); }
+  .node[data-kind="decision"] .mark { fill: var(--decided-soft); stroke: var(--decided); }
+  .node[data-kind="rejected"] .mark { fill: var(--rejected-soft); stroke: var(--rejected); stroke-dasharray: 3 2; }
+  .node[data-kind="rejected"] .title { fill: var(--ink-muted); }
+
+  .node:hover .plate { stroke: var(--aspect-color, var(--accent)); }
+
+  .hide-btn { cursor: pointer; opacity: 0; }
+  .hide-btn circle { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1; }
+  .hide-btn line { stroke: var(--ink-muted); stroke-width: 1.4; stroke-linecap: round; }
+  .node:hover .hide-btn, .node:focus-within .hide-btn, .hide-btn:focus-visible { opacity: 1; }
+  .hide-btn:hover circle { stroke: var(--rejected); }
+  .hide-btn:hover line { stroke: var(--rejected); }
+  .hide-btn:focus-visible circle { stroke: var(--accent); stroke-width: 2; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .hide-btn { transition: opacity .12s ease-out; }
+  }
+
+  .aspect-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem 1.25rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-sunk);
+  }
+
+  .aspect-bar .bar-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .6875rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-right: .25rem;
+  }
+
+  .chip {
+    font: inherit;
+    font-size: var(--step-0);
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .15rem .65rem .15rem .5rem;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--aspect-color, var(--line-strong));
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .chip .dot {
+    width: .6rem;
+    height: .6rem;
+    border-radius: 2px;
+    background: var(--aspect-color, var(--line-strong));
+  }
+
+  .chip .count {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .6875rem;
+    color: var(--ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chip[aria-pressed="false"] {
+    border-style: dashed;
+    color: var(--ink-muted);
+    background: transparent;
+  }
+
+  .chip[aria-pressed="false"] .dot { background: transparent; border: 1px solid var(--aspect-color, var(--line-strong)); }
+
+  .chip:hover { border-style: solid; }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .aspect-bar .reset {
+    font: inherit;
+    font-size: var(--step-0);
+    margin-left: auto;
+    padding: .15rem .5rem;
+    color: var(--ink-muted);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .aspect-bar .reset:hover, .aspect-bar .reset:focus-visible {
+    color: var(--accent);
+    border-color: var(--line-strong);
+    outline: none;
+  }
+
+  .aspect-bar .reset[hidden] { display: none; }
+
+  .apply {
+    font: inherit;
+    font-size: var(--step-0);
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .2rem .75rem;
+    color: var(--surface);
+    background: var(--decided);
+    border: 1px solid var(--decided);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .apply[disabled] {
+    color: var(--ink-muted);
+    background: transparent;
+    border-color: var(--line-strong);
+    cursor: default;
+  }
+
+  .apply:not([disabled]):hover { filter: brightness(1.08); }
+  .apply:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .answer {
+    margin-top: 1.1rem;
+    padding-top: .9rem;
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: .5rem;
+  }
+
+  .answer .options { display: flex; flex-wrap: wrap; gap: .35rem; }
+
+  .answer .option {
+    font: inherit;
+    font-size: var(--step-0);
+    padding: .2rem .6rem;
+    color: var(--ink);
+    background: var(--surface-sunk);
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .answer .option[aria-pressed="true"] {
+    color: var(--decided);
+    border-color: var(--decided);
+    background: var(--decided-soft);
+  }
+
+  .answer .option:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .answer textarea {
+    font: inherit;
+    font-size: var(--step-0);
+    width: 100%;
+    min-height: 4.5rem;
+    padding: .45rem .55rem;
+    color: var(--ink);
+    background: var(--surface-sunk);
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    resize: vertical;
+  }
+
+  .answer textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .node.answered .plate { stroke: var(--decided); stroke-dasharray: 5 3; }
+
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 1rem;
+    transform: translateX(-50%);
+    padding: .35rem .8rem;
+    font-size: var(--step-0);
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+  }
+
+  .toast[hidden] { display: none; }
+
+  .qa {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    background: color-mix(in srgb, var(--ground) 82%, transparent);
+    backdrop-filter: blur(3px);
+  }
+
+  .qa[hidden] { display: none; }
+
+  .qa-card {
+    width: min(38rem, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 1.75rem;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-top: 3px solid var(--aspect-color, var(--accent));
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    display: grid;
+    gap: .9rem;
+  }
+
+  .qa-head {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .6875rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  .qa-dots { margin-left: auto; display: flex; gap: .25rem; }
+
+  .qa-dots i {
+    width: .45rem;
+    height: .45rem;
+    border-radius: 50%;
+    background: var(--line-strong);
+  }
+
+  .qa-dots i.done { background: var(--decided); }
+  .qa-dots i.here { background: var(--aspect-color, var(--accent)); transform: scale(1.35); }
+
+  .qa-card h2 {
+    margin: 0;
+    font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+
+  .qa-card .body { margin: 0; max-width: 62ch; }
+  .qa-card .why { margin: 0; max-width: 62ch; color: var(--ink-muted); }
+
+  .qa-actions { display: flex; align-items: center; gap: .5rem; margin-top: .35rem; }
+
+  .qa-actions .ghost {
+    font: inherit;
+    font-size: var(--step-0);
+    padding: .25rem .7rem;
+    color: var(--ink-muted);
+    background: none;
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .qa-actions .ghost:hover, .qa-actions .ghost:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+  .qa-actions .grow { margin-left: auto; }
+
+  .qa-empty { text-align: center; color: var(--ink-muted); display: grid; gap: 1rem; }
+
+  .code-window {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    background: color-mix(in srgb, var(--ground) 80%, transparent);
+  }
+
+  .code-window[hidden] { display: none; }
+
+  .code-card {
+    width: min(58rem, 100%);
+    max-height: 100%;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .code-head {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .6rem .9rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-sunk);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step-0);
+  }
+
+  .code-head .path { color: var(--ink); overflow-wrap: anywhere; }
+  .code-head .lines { color: var(--ink-muted); }
+  .code-head .spacer { margin-left: auto; }
+
+  .code-head button {
+    font: inherit;
+    padding: .15rem .55rem;
+    color: var(--ink-muted);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .code-head button:hover, .code-head button:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+
+  .code-body {
+    margin: 0;
+    padding: .8rem 0;
+    overflow: auto;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .8125rem;
+    line-height: 1.55;
+    tab-size: 4;
+  }
+
+  .code-body .row { display: flex; gap: .9rem; padding: 0 .9rem; }
+  .code-body .row:hover { background: var(--surface-sunk); }
+
+  .code-body .ln {
+    width: 3ch;
+    flex: none;
+    text-align: right;
+    color: var(--ink-muted);
+    opacity: .65;
+    user-select: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .code-body code { white-space: pre; }
+
+  .tok-comment { color: var(--ink-muted); font-style: italic; }
+  .tok-string { color: var(--decided); }
+  .tok-number { color: var(--aspect-3); }
+  .tok-keyword { color: var(--accent); font-weight: 500; }
+  .tok-call { color: var(--aspect-2); }
+
+  .refs { display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
+
+  .refs button {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step-0);
+    padding: .1rem .4rem;
+    color: var(--accent);
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    cursor: pointer;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  .refs button:hover, .refs button:focus-visible { border-color: var(--accent); outline: none; }
+
+  .mode-toggle {
+    font: inherit;
+    font-size: var(--step-0);
+    padding: .2rem .7rem;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .mode-toggle:hover, .mode-toggle:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+  .node:focus-visible { outline: none; }
+  .node:focus-visible .plate { stroke: var(--aspect-color, var(--accent)); stroke-width: 2.5; }
+
+  .node.selected .plate { stroke: var(--aspect-color, var(--accent)); stroke-width: 2; }
+  svg.has-selection .node:not(.lit) { opacity: .3; }
+  svg.has-selection .edge:not(.lit) { opacity: .2; }
+
+  aside {
+    border-left: 1px solid var(--line);
+    background: var(--surface);
+    padding: 1.25rem;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  @media (max-width: 52rem) {
+    aside { border-left: none; border-top: 1px solid var(--line); }
+  }
+
+  .panel-kind {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step-0);
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  .panel h2 {
+    margin: .35rem 0 .75rem;
+    font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+    font-size: var(--step-3);
+    font-weight: 600;
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+
+  .status {
+    display: inline-block;
+    padding: .1rem .5rem;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: var(--step-0);
+    font-family: "IBM Plex Mono", monospace;
+  }
+
+  .status.open { color: var(--open); background: var(--open-soft); }
+  .status.decided { color: var(--decided); background: var(--decided-soft); }
+  .status.rejected { color: var(--rejected); background: var(--rejected-soft); }
+
+  .panel dl { margin: 1.1rem 0 0; display: grid; gap: .85rem; }
+  .panel dt {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .6875rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: .15rem;
+  }
+  .panel dd { margin: 0; max-width: 62ch; }
+
+  .panel .origin {
+    margin-top: 1.25rem;
+    padding-top: .85rem;
+    border-top: 1px solid var(--line);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step-0);
+    color: var(--ink-muted);
+    word-break: break-all;
+  }
+
+  .links { display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
+
+  .links button {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: var(--accent);
+    text-align: left;
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+  }
+
+  .links button:hover, .links button:focus-visible { border-bottom-color: var(--accent); outline: none; }
+
+  .hint { color: var(--ink-muted); max-width: 34ch; }
+
+  .spec { margin-top: 1.5rem; display: grid; gap: .7rem; }
+  .spec div { display: grid; gap: .1rem; }
+  .spec code {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step-0);
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    padding: .05rem .3rem;
+    justify-self: start;
+  }
+
+  .toolbar {
+    position: absolute;
+    right: 1rem;
+    bottom: 1rem;
+    display: flex;
+    gap: .35rem;
+  }
+
+  .toolbar button {
+    font: inherit;
+    font-size: var(--step-0);
+    padding: .25rem .6rem;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+  .toolbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+</style>
+
+<header>
+  <h1 id="mapTitle"></h1>
+  <span class="source" id="mapSource"></span>
+  <div class="tally" id="tally"></div>
+  <div class="legend">
+    <span><i class="swatch aspect"></i>aspect — its own colour</span>
+    <span><i class="swatch question"></i>open question</span>
+    <span><i class="swatch decision"></i>decision</span>
+    <span><i class="swatch rejected"></i>rejected</span>
+  </div>
+</header>
+
+<nav class="aspect-bar" id="aspectBar" aria-label="Aspects on the map"></nav>
+
+<div class="qa" id="qa" hidden role="dialog" aria-modal="true" aria-label="One question at a time"></div>
+
+<div class="code-window" id="codeWindow" hidden role="dialog" aria-modal="true" aria-label="Source fragment"></div>
+
+<main>
+  <div style="position: relative; min-height: 0;">
+    <svg id="canvas" role="application" aria-label="Design decision map"></svg>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <div class="toolbar">
+      <button type="button" id="fit">Fit</button>
+      <button type="button" id="clear">Clear selection</button>
+    </div>
+  </div>
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</main>
+
+<script>
+// Design map data. One record per node; `edges` carries the relation that the
+// map spec declares, so the same renderer serves an architecture map with a
+// different vocabulary.
+// Map data. Generated from the sources named in `spec.sources`; every field
+// below comes from a source document, never from the renderer.
+//
+//   title   name of the map, shown in the header and the browser tab
+//   source  where the data was taken and when, e.g. "dev/DECISIONS.md · 2026-08-23"
+//   spec    kinds — the vocabulary this map uses
+//           sources — files the data was read from
+//           edge — what an edge means in this map
+//   nodes   id, kind, title, body; optional why, cost, status, origin
+//           kind drives shape and column: aspect | question | decision | rejected
+//           for an architecture map: aspect | dependency | module | knowledge
+//   edges   [from, to, relation]; relation "holds" draws solid, "rejects" dashed
+const MAP = {
+  "title": "Clauded — design map",
+  "source": "session 2026-08-23 · dev/DECISIONS.md pending",
+  "spec": {
+    "nodes": "aspect · question · decision · rejected alternative",
+    "sources": [
+      "dev/DECISIONS.md — closed decisions",
+      "dev/PLAN.md ## Fog — open questions",
+      "dev/PLAN.md Decide steps"
+    ],
+    "edge": "belongs to aspect · answers question · rejected in favour of"
+  },
+  "nodes": [
+    {
+      "id": "a-contract",
+      "kind": "aspect",
+      "title": "Map contract",
+      "body": "What the map is and where its content comes from. Settled first: every later choice depends on whether the map may hold knowledge of its own.",
+      "origin": "session, 2026-08-23"
+    },
+    {
+      "id": "a-render",
+      "kind": "aspect",
+      "title": "Rendering and storage",
+      "body": "How the map turns into something you can look at, and where each part of it lives in the repository.",
+      "origin": "session, 2026-08-23"
+    },
+    {
+      "id": "a-interaction",
+      "kind": "aspect",
+      "title": "Walking the graph",
+      "body": "What a click does. The mode exists for reading a graph by walking it, so this aspect decides whether the mode is worth having.",
+      "origin": "session, 2026-08-23"
+    },
+    {
+      "id": "d-derived",
+      "kind": "decision",
+      "status": "decided",
+      "title": "The map is derived, never authored",
+      "body": "Source documents hold the knowledge; the map is generated from them and can be thrown away at any time.",
+      "why": "A map that holds knowledge of its own drifts from the code, and 14.4 already says a stale diagram is worse than none.",
+      "cost": "Anything the map should show has to exist in a source document first — including edges.",
+      "origin": "session decision, 2026-08-23"
+    },
+    {
+      "id": "d-split",
+      "kind": "decision",
+      "status": "decided",
+      "title": "Data and view are separate files",
+      "body": "Map data lives in dev/design/ under git; the view is one self-contained HTML file that reads it.",
+      "why": "Edmond asked for both ways of opening a map: locally from the repository and as a published artifact. One data file feeds both.",
+      "cost": "The data file needs its own format and a check that it stays in step with the sources.",
+      "origin": "session decision, 2026-08-23",
+      "refs": [
+        {
+          "file": "tools/build-map.py",
+          "lines": "84-111",
+          "code": "\ndef read_fragment(root, ref):\n    \"\"\"Reads the cited lines into ref['code']; returns the problem, or None.\"\"\"\n    path = root / ref[\"file\"]\n    if not path.is_file():\n        return f\"{ref['file']}: no such file under {root}\"\n\n    lines = path.read_text(encoding=\"utf-8\", errors=\"replace\").splitlines()\n    span = str(ref.get(\"lines\", \"\")).strip()\n\n    if not span:\n        first, last = 1, len(lines)\n    else:\n        bounds = span.split(\"-\")\n        try:\n            first = int(bounds[0])\n            last = int(bounds[-1])\n        except ValueError:\n            return f\"{ref['file']}: lines '{span}' is not a range like 12-40\"\n\n    if first < 1 or last > len(lines) or first > last:\n        return f\"{ref['file']}: lines {span} fall outside the file ({len(lines)} lines)\"\n    if last - first + 1 > MAX_FRAGMENT_LINES:\n        return f\"{ref['file']}: {last - first + 1} lines is too much to read on a card\"\n\n    ref[\"code\"] = \"\\n\".join(lines[first - 1:last])\n    ref[\"lines\"] = f\"{first}-{last}\" if first != last else str(first)\n    return None"
+        }
+      ]
+    },
+    {
+      "id": "d-two-vocab",
+      "kind": "decision",
+      "status": "decided",
+      "title": "One engine, two vocabularies",
+      "body": "The design map speaks aspect / question / decision / rejected. The architecture map speaks module / class / knowledge / dependency. Layout, panel and navigation are shared.",
+      "why": "The two maps look alike and read alike; only their content differs, so splitting the renderer would double the work for nothing.",
+      "cost": "The shared layer has to stay free of either vocabulary.",
+      "origin": "session decision, 2026-08-23",
+      "refs": [
+        {
+          "file": "web/map-template.html",
+          "lines": "1469-1490",
+          "code": "function highlight(code) {\n  let out = \"\";\n  let last = 0;\n\n  for (const match of code.matchAll(TOKEN)) {\n    const [text, comment, string, number, word, call] = match;\n    out += escapeHtml(code.slice(last, match.index));\n    last = match.index + text.length;\n\n    if (comment) out += `<span class=\"tok-comment\">${escapeHtml(comment)}</span>`;\n    else if (string) out += `<span class=\"tok-string\">${escapeHtml(string)}</span>`;\n    else if (number) out += `<span class=\"tok-number\">${escapeHtml(number)}</span>`;\n    else if (KEYWORDS.has(word)) out += `<span class=\"tok-keyword\">${escapeHtml(word)}</span>${call ? escapeHtml(call) : \"\"}`;\n    else if (call) out += `<span class=\"tok-call\">${escapeHtml(word)}</span>${escapeHtml(call)}`;\n    else out += escapeHtml(word);\n  }\n\n  return out + escapeHtml(code.slice(last));\n}\n\n/**\n * Opens one source fragment. The code travels inside the map: the build script"
+        }
+      ]
+    },
+    {
+      "id": "d-self-spec",
+      "kind": "decision",
+      "status": "decided",
+      "title": "Each map carries its own spec",
+      "body": "The map declares which nodes it holds, which files it reads and what an edge means. The spec is written when the map is created.",
+      "why": "Edmond: what a map takes and from where is described at creation time, not fixed once for all maps.",
+      "cost": "Two maps of the same project can disagree about what a node is; nothing checks that.",
+      "origin": "session decision, 2026-08-23"
+    },
+    {
+      "id": "q-panel",
+      "kind": "question",
+      "status": "open",
+      "title": "Long text: side panel or popover?",
+      "body": "A node carries several paragraphs — the decision, its reason, its price. Where does that text appear?",
+      "why": "Panel keeps the graph in place and holds long text, but eats a fifth of the screen. A popover keeps the graph full-width and dies on long text.",
+      "origin": "open, this session",
+      "options": [
+        "side panel",
+        "popover",
+        "both, panel by default"
+      ],
+      "refs": [
+        {
+          "file": "web/map-template.html",
+          "lines": "1494-1520",
+          "code": "function openCode(ref) {\n  const box = document.getElementById(\"codeWindow\");\n  box.textContent = \"\";\n  box.hidden = false;\n\n  const card = document.createElement(\"div\");\n  card.className = \"code-card\";\n\n  const head = document.createElement(\"div\");\n  head.className = \"code-head\";\n  const path = document.createElement(\"span\");\n  path.className = \"path\";\n  path.textContent = ref.file;\n  const lines = document.createElement(\"span\");\n  lines.className = \"lines\";\n  lines.textContent = ref.lines ? `:${ref.lines}` : \"\";\n  const spacer = document.createElement(\"span\");\n  spacer.className = \"spacer\";\n\n  const copy = document.createElement(\"button\");\n  copy.type = \"button\";\n  copy.textContent = \"Copy path\";\n  copy.addEventListener(\"click\", async () => {\n    try {\n      await navigator.clipboard.writeText(ref.lines ? `${ref.file}:${ref.lines}` : ref.file);\n      toast(\"Path copied\");\n    } catch (error) {"
+        }
+      ]
+    },
+    {
+      "id": "q-format",
+      "kind": "decision",
+      "status": "decided",
+      "title": "Map data is YAML in the repository",
+      "body": "The map source is dev/design/<name>.map.yaml, edited by hand and reviewed as text.",
+      "why": "Edmond chose YAML: it is read and edited by a person, while the page carries the same data as a literal.",
+      "origin": "open, this session"
+    },
+    {
+      "id": "q-trigger",
+      "kind": "question",
+      "status": "open",
+      "title": "How the mode is entered",
+      "body": "A trigger phrase, a slash command, or an entry in the skill table that fires on the word `map`.",
+      "origin": "open, this session",
+      "options": [
+        "slash command",
+        "trigger phrase",
+        "skill pointer only"
+      ]
+    },
+    {
+      "id": "r-plantuml",
+      "kind": "rejected",
+      "status": "rejected",
+      "title": "PlantUML, as 14.4 requires",
+      "body": "The rule already names PlantUML for dev/design/ diagrams.",
+      "why": "It renders a picture and stops there: no click, no hidden text, no walking. Edmond: PlantUML is not good enough.",
+      "origin": "rejected, this session"
+    },
+    {
+      "id": "r-program",
+      "kind": "rejected",
+      "status": "rejected",
+      "title": "A generator program in dev/tools/",
+      "body": "A script that reads the sources and writes the data file.",
+      "why": "Edmond may write it later; until then the map is assembled by hand, so the mode must work without a program.",
+      "origin": "postponed, this session"
+    },
+    {
+      "id": "r-map-source",
+      "kind": "rejected",
+      "status": "rejected",
+      "title": "The map as the source of truth",
+      "body": "Design questions would be written into the map and the documents generated from it.",
+      "why": "Rejected with the first decision: two sources of truth for the same knowledge is the drift that 14.4 warns about.",
+      "origin": "rejected, this session"
+    }
+  ],
+  "edges": [
+    [
+      "a-contract",
+      "d-derived",
+      "holds"
+    ],
+    [
+      "a-contract",
+      "d-self-spec",
+      "holds"
+    ],
+    [
+      "a-render",
+      "d-split",
+      "holds"
+    ],
+    [
+      "a-render",
+      "d-two-vocab",
+      "holds"
+    ],
+    [
+      "a-render",
+      "q-format",
+      "holds"
+    ],
+    [
+      "a-interaction",
+      "q-panel",
+      "holds"
+    ],
+    [
+      "a-interaction",
+      "q-trigger",
+      "holds"
+    ],
+    [
+      "d-derived",
+      "r-map-source",
+      "rejects"
+    ],
+    [
+      "d-split",
+      "r-plantuml",
+      "rejects"
+    ],
+    [
+      "d-split",
+      "r-program",
+      "rejects"
+    ]
+  ]
+};
+
+const KIND_LABEL = { aspect: "aspect", question: "open question", decision: "decision", rejected: "rejected" };
+const NODE_W = 232;
+const NODE_H = 52;
+const COL_GAP = 96;
+const ROW_GAP = 18;
+
+const svg = document.getElementById("canvas");
+const panel = document.getElementById("panel");
+const byId = new Map(MAP.nodes.map(n => [n.id, n]));
+
+// One hue per aspect. The nodes and edges of an aspect's subtree take its hue,
+// so a glance at a line says which aspect it belongs to.
+const ASPECT_HUES = 3;
+const aspectColour = new Map(
+  MAP.nodes.filter(n => n.kind === "aspect")
+    .map((aspect, index) => [aspect.id, `var(--aspect-${index % ASPECT_HUES + 1})`])
+);
+
+/** Aspect that owns each node; the first aspect reaching it wins. */
+function aspectOwners() {
+  const children = childrenOf(MAP.edges);
+  const owner = new Map();
+  const walk = (id, aspect) => {
+    if (owner.has(id)) return;
+    owner.set(id, aspect);
+    for (const child of children.get(id) || []) walk(child, aspect);
+  };
+
+  for (const node of MAP.nodes) if (node.kind === "aspect") walk(node.id, node.id);
+  return owner;
+}
+
+/** Children of every node, in the order the edges declare them. */
+function childrenOf(edges) {
+  const children = new Map();
+  for (const [from, to] of edges) {
+    if (!children.has(from)) children.set(from, []);
+    children.get(from).push(to);
+  }
+  return children;
+}
+
+/**
+ * Assigns a column by kind and stacks each column top to bottom, then lifts
+ * every aspect to the vertical centre of the children it owns. Writes x and y
+ * onto the nodes and returns the drawing bounds, used to fit the view.
+ */
+function layout(nodes, edges) {
+  const column = { aspect: 0, question: 1, decision: 1, rejected: 2 };
+  const cursor = [0, 0, 0];
+  const children = childrenOf(edges);
+  const shown = new Set(nodes.map(n => n.id));
+
+  // Walk aspects in order so that an aspect's children sit next to it.
+  const placed = new Set();
+  const place = id => {
+    if (placed.has(id) || !shown.has(id)) return;
+    const node = byId.get(id);
+    const col = column[node.kind];
+    node.x = col * (NODE_W + COL_GAP);
+    node.y = cursor[col];
+    cursor[col] += NODE_H + ROW_GAP;
+    placed.add(id);
+    for (const child of children.get(id) || []) place(child);
+  };
+
+  for (const node of nodes) if (node.kind === "aspect") place(node.id);
+  for (const node of nodes) place(node.id);
+
+  for (const node of nodes) {
+    const kids = (children.get(node.id) || []).filter(id => shown.has(id)).map(id => byId.get(id));
+    if (node.kind !== "aspect" || kids.length === 0) continue;
+    const top = Math.min(...kids.map(k => k.y));
+    const bottom = Math.max(...kids.map(k => k.y + NODE_H));
+    node.y = (top + bottom) / 2 - NODE_H / 2;
+  }
+
+  if (nodes.length === 0) return { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+
+  const xs = nodes.map(n => n.x);
+  const ys = nodes.map(n => n.y);
+  return {
+    minX: Math.min(...xs), minY: Math.min(...ys),
+    maxX: Math.max(...xs) + NODE_W, maxY: Math.max(...ys) + NODE_H
+  };
+}
+
+/**
+ * Nodes left after the hidden aspects are dropped. A node survives while any
+ * visible aspect still reaches it, so a decision shared by two aspects stays
+ * until both are hidden.
+ */
+function visibleNodes(hidden) {
+  const children = childrenOf(MAP.edges);
+  const reached = new Set();
+  const walk = id => {
+    if (reached.has(id)) return;
+    reached.add(id);
+    for (const child of children.get(id) || []) walk(child);
+  };
+
+  for (const node of MAP.nodes) {
+    if (node.kind === "aspect" && !hidden.has(node.id)) walk(node.id);
+  }
+
+  return MAP.nodes.filter(node => reached.has(node.id));
+}
+
+/** Breaks a title into at most two lines of roughly `max` characters. */
+function wrap(text, max) {
+  const words = text.split(" ");
+  const lines = [""];
+  for (const word of words) {
+    const line = lines[lines.length - 1];
+    if (line && (line + " " + word).length > max && lines.length < 2) lines.push(word);
+    else lines[lines.length - 1] = line ? line + " " + word : word;
+  }
+  if (lines[1] && lines[1].length > max) lines[1] = lines[1].slice(0, max - 1) + "…";
+  return lines;
+}
+
+const NS = "http://www.w3.org/2000/svg";
+const el = (name, attrs = {}) => {
+  const node = document.createElementNS(NS, name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
+};
+
+/** Marks the node kind by shape: square aspect, diamond question, circle decision. */
+function mark(kind) {
+  if (kind === "aspect") return el("rect", { class: "mark", x: 12, y: NODE_H / 2 - 5, width: 10, height: 10, rx: 1.5 });
+  if (kind === "question") return el("rect", { class: "mark", x: 12, y: NODE_H / 2 - 5, width: 10, height: 10, transform: `rotate(45 17 ${NODE_H / 2})` });
+  return el("circle", { class: "mark", cx: 17, cy: NODE_H / 2, r: 5.5 });
+}
+
+const viewport = el("g");
+const edgeLayer = el("g");
+const nodeLayer = el("g");
+viewport.append(edgeLayer, nodeLayer);
+svg.append(viewport);
+
+const hidden = new Set();
+let bounds = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+let edgeShapes = [];
+let nodeShapes = new Map();
+let selected = null;
+
+// What the reader has entered but not yet handed over. Answers are keyed by
+// node id; asks are free questions addressed to Claude. Both survive a reload
+// through localStorage and leave the page only when Apply is pressed.
+const pending = { answers: new Map(), asks: [] };
+const STORE_KEY = "map-pending";
+
+function loadPending() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+    for (const [id, value] of Object.entries(raw.answers || {})) pending.answers.set(id, value);
+    pending.asks.push(...(raw.asks || []));
+  } catch (error) {
+    // No storage, or a stale value: the page works without either.
+  }
+}
+
+function savePending() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      answers: Object.fromEntries(pending.answers),
+      asks: pending.asks
+    }));
+  } catch (error) {
+    // Storage can be unavailable; losing the draft is better than a broken page.
+  }
+}
+
+function pendingCount() {
+  return pending.answers.size + pending.asks.length;
+}
+
+/** The button that drops an aspect and its subtree out of the view. */
+function hideButton(node) {
+  const button = el("g", {
+    class: "hide-btn", transform: `translate(${NODE_W - 16} 16)`,
+    tabindex: "0", role: "button", "aria-label": `Hide aspect ${node.title}`
+  });
+  button.append(el("circle", { r: 8 }));
+  button.append(el("line", { x1: -3.2, y1: -3.2, x2: 3.2, y2: 3.2 }));
+  button.append(el("line", { x1: -3.2, y1: 3.2, x2: 3.2, y2: -3.2 }));
+
+  const hide = event => {
+    event.stopPropagation();
+    hidden.add(node.id);
+    render();
+    fit();
+  };
+
+  button.addEventListener("click", hide);
+  button.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); hide(event); }
+  });
+  return button;
+}
+
+/** Draws the graph for the aspects that are currently shown. */
+function render() {
+  edgeLayer.textContent = "";
+  nodeLayer.textContent = "";
+  nodeShapes = new Map();
+
+  const nodes = visibleNodes(hidden);
+  const owner = aspectOwners();
+  const colourOf = id => aspectColour.get(owner.get(id)) || "var(--line-strong)";
+  const shown = new Set(nodes.map(n => n.id));
+  const edges = MAP.edges.filter(([from, to]) => shown.has(from) && shown.has(to));
+  bounds = layout(nodes, edges);
+
+  edgeShapes = edges.map(([from, to, relation]) => {
+    const a = byId.get(from);
+    const b = byId.get(to);
+    const x1 = a.x + NODE_W;
+    const y1 = a.y + NODE_H / 2;
+    const x2 = b.x;
+    const y2 = b.y + NODE_H / 2;
+    const bend = (x2 - x1) / 2;
+    const path = el("path", {
+      class: "edge " + relation,
+      d: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`
+    });
+    path.style.setProperty("--edge-color", colourOf(from));
+    edgeLayer.append(path);
+    return { path, from, to };
+  });
+
+  for (const node of nodes) {
+    const group = el("g", {
+      class: "node", "data-kind": node.kind, transform: `translate(${node.x} ${node.y})`,
+      tabindex: "0", role: "button", "aria-label": `${KIND_LABEL[node.kind]}: ${node.title}`
+    });
+    group.style.setProperty("--aspect-color", colourOf(node.id));
+    group.append(el("rect", { class: "plate", width: NODE_W, height: NODE_H }));
+    group.append(mark(node.kind));
+
+    const kindLabel = el("text", { class: "kind", x: 32, y: 18 });
+    kindLabel.textContent = KIND_LABEL[node.kind].toUpperCase();
+    group.append(kindLabel);
+
+    wrap(node.title, 26).forEach((line, index) => {
+      const text = el("text", { class: "title", x: 32, y: 34 + index * 14 });
+      text.textContent = line;
+      group.append(text);
+    });
+
+    if (node.kind === "aspect") group.append(hideButton(node));
+
+    group.addEventListener("click", () => select(node.id));
+    group.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(node.id); }
+    });
+
+    nodeLayer.append(group);
+    nodeShapes.set(node.id, group);
+  }
+
+  renderAspectBar();
+  renderTally(nodes);
+  renderNodeStates();
+  updateApply();
+  if (selected && nodeShapes.has(selected)) select(selected);
+  else if (selected) clearSelection();
+}
+
+/**
+ * Counts the nodes on the map by status and shows how far the questions have
+ * been answered. Hidden aspects drop out of the count with their nodes.
+ */
+function renderTally(nodes) {
+  const tally = document.getElementById("tally");
+  tally.textContent = "";
+
+  const total = status => nodes.filter(node => node.status === status).length;
+  const open = total("open");
+  const decided = total("decided");
+  const rejected = total("rejected");
+  if (open + decided + rejected === 0) return;
+
+  for (const [status, value] of [["open", open], ["decided", decided], ["rejected", rejected]]) {
+    if (value === 0) continue;
+    const count = document.createElement("span");
+    count.className = "count " + status;
+    const number = document.createElement("b");
+    number.textContent = value;
+    count.append(number, document.createTextNode(status));
+    tally.append(count);
+  }
+
+  if (open + decided === 0) return;
+  const progress = document.createElement("span");
+  progress.className = "progress";
+  progress.title = `${decided} of ${open + decided} answered`;
+  const fill = document.createElement("i");
+  fill.style.width = Math.round(decided / (open + decided) * 100) + "%";
+  progress.append(fill);
+  tally.append(progress);
+}
+
+/** One chip per aspect: pressed means the aspect is on the map. */
+function renderAspectBar() {
+  const bar = document.getElementById("aspectBar");
+  bar.textContent = "";
+
+  const label = document.createElement("span");
+  label.className = "bar-label";
+  label.textContent = "Aspects";
+  bar.append(label);
+
+  const owner = aspectOwners();
+  for (const aspect of MAP.nodes.filter(n => n.kind === "aspect")) {
+    const shown = !hidden.has(aspect.id);
+    const size = MAP.nodes.filter(n => owner.get(n.id) === aspect.id && n.id !== aspect.id).length;
+
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.setAttribute("aria-pressed", String(shown));
+    chip.style.setProperty("--aspect-color", aspectColour.get(aspect.id));
+
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    const name = document.createElement("span");
+    name.textContent = aspect.title;
+    const count = document.createElement("span");
+    count.className = "count";
+    const openHere = MAP.nodes.filter(n => owner.get(n.id) === aspect.id && n.status === "open").length;
+    count.textContent = openHere ? `${openHere}?/${size}` : size;
+    count.title = openHere ? `${openHere} open of ${size} nodes` : `${size} nodes`;
+    chip.append(dot, name, count);
+
+    chip.addEventListener("click", () => {
+      if (shown) hidden.add(aspect.id);
+      else hidden.delete(aspect.id);
+      render();
+      fit();
+    });
+
+    bar.append(chip);
+  }
+
+  const qa = document.createElement("button");
+  qa.type = "button";
+  qa.className = "mode-toggle";
+  qa.style.marginLeft = "auto";
+  qa.textContent = "One question at a time";
+  qa.addEventListener("click", () => openQA());
+  bar.append(qa);
+
+  const apply = document.createElement("button");
+  apply.type = "button";
+  apply.className = "apply";
+  apply.id = "applyButton";
+  apply.addEventListener("click", applyPending);
+  bar.append(apply);
+
+  const reset = document.createElement("button");
+  reset.type = "button";
+  reset.className = "reset";
+  reset.style.marginLeft = "0";
+  reset.textContent = "Show all";
+  reset.hidden = hidden.size === 0;
+  reset.addEventListener("click", () => {
+    hidden.clear();
+    render();
+    fit();
+  });
+  bar.append(reset);
+}
+
+/** Opens a node in the panel and dims everything it is not connected to. */
+function select(id) {
+  selected = id;
+  const lit = new Set([id]);
+  for (const { from, to } of edgeShapes) {
+    if (from === id) lit.add(to);
+    if (to === id) lit.add(from);
+  }
+
+  svg.classList.add("has-selection");
+  for (const [nodeId, group] of nodeShapes) {
+    group.classList.toggle("lit", lit.has(nodeId));
+    group.classList.toggle("selected", nodeId === id);
+  }
+  for (const { path, from, to } of edgeShapes) {
+    path.classList.toggle("lit", from === id || to === id);
+  }
+
+  renderPanel(byId.get(id), [...lit].filter(other => other !== id));
+}
+
+function clearSelection() {
+  selected = null;
+  svg.classList.remove("has-selection");
+  for (const group of nodeShapes.values()) group.classList.remove("lit", "selected");
+  for (const { path } of edgeShapes) path.classList.remove("lit");
+  renderSpec();
+}
+
+function renderSpec() {
+  panel.innerHTML = "";
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = "Pick a node to read the full record. Neighbours stay lit; everything else dims.";
+  panel.append(hint);
+
+  const spec = document.createElement("div");
+  spec.className = "spec";
+  const rows = [
+    ["Nodes", MAP.spec.nodes],
+    ["Edge means", MAP.spec.edge]
+  ];
+  for (const [label, value] of rows) {
+    const row = document.createElement("div");
+    const dt = document.createElement("span");
+    dt.className = "panel-kind";
+    dt.textContent = label;
+    const dd = document.createElement("span");
+    dd.textContent = value;
+    row.append(dt, dd);
+    spec.append(row);
+  }
+
+  const sources = document.createElement("div");
+  const label = document.createElement("span");
+  label.className = "panel-kind";
+  label.textContent = "Reads";
+  sources.append(label);
+  for (const source of MAP.spec.sources) {
+    const code = document.createElement("code");
+    code.textContent = source;
+    sources.append(code);
+  }
+  spec.append(sources);
+  panel.append(spec);
+}
+
+function renderPanel(node, neighbours) {
+  panel.innerHTML = "";
+
+  const kind = document.createElement("div");
+  kind.className = "panel-kind";
+  kind.textContent = KIND_LABEL[node.kind];
+  panel.append(kind);
+
+  const title = document.createElement("h2");
+  title.textContent = node.title;
+  panel.append(title);
+
+  if (node.status) {
+    const status = document.createElement("span");
+    status.className = "status " + node.status;
+    status.textContent = node.status;
+    panel.append(status);
+  }
+
+  const list = document.createElement("dl");
+  const rows = [
+    ["What", node.body],
+    ["Why", node.why],
+    ["Price", node.cost]
+  ].filter(([, value]) => value);
+
+  for (const [label, value] of rows) {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    list.append(dt, dd);
+  }
+
+  if (neighbours.length) {
+    const dt = document.createElement("dt");
+    dt.textContent = "Connected";
+    const dd = document.createElement("dd");
+    dd.className = "links";
+    for (const id of neighbours) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = byId.get(id).title;
+      button.addEventListener("click", () => select(id));
+      dd.append(button);
+    }
+    list.append(dt, dd);
+  }
+
+  panel.append(list);
+
+  if (node.refs && node.refs.length) {
+    const dt = document.createElement("dt");
+    dt.textContent = "Files";
+    const dd = document.createElement("dd");
+    dd.className = "refs";
+    for (const ref of node.refs) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = ref.lines ? `${ref.file}:${ref.lines}` : ref.file;
+      button.disabled = !ref.code;
+      button.title = ref.code ? "Open the fragment" : "No fragment stored for this file";
+      button.addEventListener("click", () => openCode(ref));
+      dd.append(button);
+    }
+
+    list.append(dt, dd);
+  }
+
+  panel.append(answerBlock(node));
+
+  if (node.origin) {
+    const origin = document.createElement("p");
+    origin.className = "origin";
+    origin.textContent = node.origin;
+    panel.append(origin);
+  }
+}
+
+/**
+ * Answering and asking, for any node. A question offers its options and a free
+ * field; every node offers "ask about this", so the reader can walk the map and
+ * turn a node into a question of their own.
+ */
+function answerBlock(node) {
+  const box = document.createElement("div");
+  box.className = "answer";
+
+  if (node.kind === "question") {
+    const label = document.createElement("span");
+    label.className = "panel-kind";
+    label.textContent = "Your answer";
+    box.append(label);
+
+    if (node.options && node.options.length) {
+      const options = document.createElement("div");
+      options.className = "options";
+      for (const option of node.options) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "option";
+        button.textContent = option;
+        button.setAttribute("aria-pressed", String(pending.answers.get(node.id) === option));
+        button.addEventListener("click", () => {
+          if (pending.answers.get(node.id) === option) pending.answers.delete(node.id);
+          else pending.answers.set(node.id, option);
+          commitPending();
+          select(node.id);
+        });
+        options.append(button);
+      }
+
+      box.append(options);
+    }
+
+    const field = document.createElement("textarea");
+    field.placeholder = "Answer in your own words";
+    const current = pending.answers.get(node.id);
+    field.value = node.options && node.options.includes(current) ? "" : current || "";
+    field.addEventListener("change", () => {
+      const value = field.value.trim();
+      if (value) pending.answers.set(node.id, value);
+      else pending.answers.delete(node.id);
+      commitPending();
+      renderNodeStates();
+    });
+    box.append(field);
+  }
+
+  const ask = document.createElement("textarea");
+  ask.placeholder = node.kind === "question" ? "Ask Claude about this question" : "Ask Claude about this node — \"why is this here?\"";
+  ask.addEventListener("change", () => {
+    const text = ask.value.trim();
+    if (!text) return;
+    pending.asks.push({ about: node.id, title: node.title, text });
+    ask.value = "";
+    commitPending();
+  });
+  box.append(ask);
+
+  return box;
+}
+
+/** Saves the draft and refreshes everything that shows how much is waiting. */
+function commitPending() {
+  savePending();
+  updateApply();
+  renderNodeStates();
+  renderTally(visibleNodes(hidden));
+}
+
+/** Marks the nodes that already carry an answer. */
+function renderNodeStates() {
+  for (const [id, group] of nodeShapes) group.classList.toggle("answered", pending.answers.has(id));
+}
+
+function updateApply() {
+  const button = document.getElementById("applyButton");
+  if (!button) return;
+  const count = pendingCount();
+  button.disabled = count === 0;
+  button.textContent = count ? `Apply ${count}` : "Nothing to apply";
+}
+
+/**
+ * Hands the draft over. With the map plugin running, `window.mapBridge` takes
+ * it and the session picks it up; without it, the summary goes to the clipboard
+ * and the reader pastes it into the conversation.
+ */
+async function applyPending() {
+  if (pendingCount() === 0) return;
+
+  const lines = [`# ${MAP.title} — answers`];
+  for (const [id, answer] of pending.answers) {
+    lines.push(`- ${id} · ${byId.get(id).title} → ${answer}`);
+  }
+
+  if (pending.asks.length) {
+    lines.push("", "# Questions for Claude");
+    for (const ask of pending.asks) lines.push(`- about ${ask.about} · ${ask.title}: ${ask.text}`);
+  }
+
+  const summary = lines.join("\n");
+  const payload = {
+    map: MAP.title,
+    answers: Object.fromEntries(pending.answers),
+    asks: pending.asks,
+    summary
+  };
+
+  if (window.mapBridge && typeof window.mapBridge.apply === "function") {
+    await window.mapBridge.apply(payload);
+    toast("Sent to Claude");
+  } else {
+    try {
+      await navigator.clipboard.writeText(summary);
+      toast("Copied — paste it into the conversation");
+    } catch (error) {
+      toast("Copy failed; the summary is in the panel");
+      console.log(summary);
+    }
+  }
+
+  pending.answers.clear();
+  pending.asks.length = 0;
+  commitPending();
+  if (selected) select(selected);
+}
+
+let toastTimer = null;
+
+function toast(text) {
+  const box = document.getElementById("toast");
+  box.textContent = text;
+  box.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { box.hidden = true; }, 2600);
+}
+
+// Syntax colouring. One tokenizer for every language the map is likely to cite:
+// comments, strings, numbers, keywords and call names carry almost all of the
+// reading value, and the rest stays plain text.
+const KEYWORDS = new Set([
+  "abstract", "as", "async", "await", "break", "case", "catch", "class", "const", "continue",
+  "declare", "def", "default", "defer", "delete", "do", "elif", "else", "elseif", "enum",
+  "except", "export", "extends", "final", "finally", "fn", "for", "foreach", "from", "func",
+  "function", "go", "if", "impl", "implements", "import", "in", "instanceof", "interface",
+  "let", "match", "mod", "mut", "namespace", "new", "of", "package", "private", "protected",
+  "public", "pub", "raise", "readonly", "return", "self", "static", "struct", "super", "switch",
+  "this", "throw", "trait", "try", "type", "typedef", "union", "unsafe", "use", "var", "void",
+  "while", "with", "yield", "true", "false", "null", "nil", "None", "True", "False"
+]);
+
+const TOKEN = /(\/\*[\s\S]*?\*\/|\/\/[^\n]*|#[^\n]*|--[^\n]*)|('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`)|(\b\d[\d_.xXa-fA-F]*\b)|([A-Za-z_$][\w$]*)(\s*\()?/g;
+
+const escapeHtml = text => text.replace(/[&<>]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]));
+
+/** Returns the fragment as HTML with token spans; unknown text stays plain. */
+function highlight(code) {
+  let out = "";
+  let last = 0;
+
+  for (const match of code.matchAll(TOKEN)) {
+    const [text, comment, string, number, word, call] = match;
+    out += escapeHtml(code.slice(last, match.index));
+    last = match.index + text.length;
+
+    if (comment) out += `<span class="tok-comment">${escapeHtml(comment)}</span>`;
+    else if (string) out += `<span class="tok-string">${escapeHtml(string)}</span>`;
+    else if (number) out += `<span class="tok-number">${escapeHtml(number)}</span>`;
+    else if (KEYWORDS.has(word)) out += `<span class="tok-keyword">${escapeHtml(word)}</span>${call ? escapeHtml(call) : ""}`;
+    else if (call) out += `<span class="tok-call">${escapeHtml(word)}</span>${escapeHtml(call)}`;
+    else out += escapeHtml(word);
+  }
+
+  return out + escapeHtml(code.slice(last));
+}
+
+/**
+ * Opens one source fragment. The code travels inside the map: the build script
+ * copies it out of the file at build time, so the page shows what the map was
+ * built from even when the file has moved on.
+ */
+function openCode(ref) {
+  const box = document.getElementById("codeWindow");
+  box.textContent = "";
+  box.hidden = false;
+
+  const card = document.createElement("div");
+  card.className = "code-card";
+
+  const head = document.createElement("div");
+  head.className = "code-head";
+  const path = document.createElement("span");
+  path.className = "path";
+  path.textContent = ref.file;
+  const lines = document.createElement("span");
+  lines.className = "lines";
+  lines.textContent = ref.lines ? `:${ref.lines}` : "";
+  const spacer = document.createElement("span");
+  spacer.className = "spacer";
+
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.textContent = "Copy path";
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(ref.lines ? `${ref.file}:${ref.lines}` : ref.file);
+      toast("Path copied");
+    } catch (error) {
+      toast("Copy failed");
+    }
+  });
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "Close";
+  close.addEventListener("click", closeCode);
+
+  head.append(path, lines, spacer, copy, close);
+  card.append(head);
+
+  const body = document.createElement("pre");
+  body.className = "code-body";
+  const first = parseInt(String(ref.lines || "1").split("-")[0], 10) || 1;
+
+  (ref.code || "").split("\n").forEach((line, index) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    const number = document.createElement("span");
+    number.className = "ln";
+    number.textContent = first + index;
+    const code = document.createElement("code");
+    code.innerHTML = highlight(line);
+    row.append(number, code);
+    body.append(row);
+  });
+
+  card.append(body);
+  box.append(card);
+  close.focus();
+}
+
+function closeCode() {
+  document.getElementById("codeWindow").hidden = true;
+}
+
+// One question at a time: the same answering, shown one card at a time so the
+// reader is not asked to hold five open questions in their head at once.
+let qaIndex = 0;
+
+function openQuestions() {
+  return visibleNodes(hidden).filter(node => node.kind === "question" && node.status === "open");
+}
+
+function openQA(index = 0) {
+  qaIndex = index;
+  document.getElementById("qa").hidden = false;
+  renderQA();
+}
+
+function closeQA() {
+  document.getElementById("qa").hidden = true;
+  if (selected) select(selected);
+}
+
+function renderQA() {
+  const box = document.getElementById("qa");
+  box.textContent = "";
+
+  const questions = openQuestions();
+  const card = document.createElement("div");
+  card.className = "qa-card";
+
+  if (questions.length === 0) {
+    card.classList.add("qa-empty");
+    const text = document.createElement("p");
+    text.textContent = "No open questions on the map.";
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "ghost";
+    back.textContent = "Back to the map";
+    back.addEventListener("click", closeQA);
+    card.append(text, back);
+    box.append(card);
+    return;
+  }
+
+  qaIndex = Math.max(0, Math.min(qaIndex, questions.length - 1));
+  const node = questions[qaIndex];
+  const owner = aspectOwners();
+  card.style.setProperty("--aspect-color", aspectColour.get(owner.get(node.id)) || "var(--accent)");
+
+  const head = document.createElement("div");
+  head.className = "qa-head";
+  const where = document.createElement("span");
+  where.textContent = byId.get(owner.get(node.id))?.title || "question";
+  const position = document.createElement("span");
+  position.textContent = `${qaIndex + 1} of ${questions.length}`;
+  const dots = document.createElement("span");
+  dots.className = "qa-dots";
+  questions.forEach((question, index) => {
+    const dot = document.createElement("i");
+    if (pending.answers.has(question.id)) dot.classList.add("done");
+    if (index === qaIndex) dot.classList.add("here");
+    dots.append(dot);
+  });
+  head.append(where, position, dots);
+  card.append(head);
+
+  const title = document.createElement("h2");
+  title.textContent = node.title;
+  card.append(title);
+
+  if (node.body) {
+    const body = document.createElement("p");
+    body.className = "body";
+    body.textContent = node.body;
+    card.append(body);
+  }
+
+  if (node.why) {
+    const why = document.createElement("p");
+    why.className = "why";
+    why.textContent = node.why;
+    card.append(why);
+  }
+
+  card.append(answerBlock(node));
+
+  const actions = document.createElement("div");
+  actions.className = "qa-actions";
+
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "ghost";
+  back.textContent = "← Previous";
+  back.disabled = qaIndex === 0;
+  back.addEventListener("click", () => { qaIndex -= 1; renderQA(); });
+
+  const next = document.createElement("button");
+  next.type = "button";
+  next.className = "ghost";
+  next.textContent = qaIndex === questions.length - 1 ? "Done" : "Next →";
+  next.addEventListener("click", () => {
+    if (qaIndex === questions.length - 1) closeQA();
+    else { qaIndex += 1; renderQA(); }
+  });
+
+  const toMap = document.createElement("button");
+  toMap.type = "button";
+  toMap.className = "ghost grow";
+  toMap.textContent = "Show on the map";
+  toMap.addEventListener("click", () => { closeQA(); select(node.id); });
+
+  actions.append(back, next, toMap);
+  card.append(actions);
+  box.append(card);
+}
+
+// View transform: wheel zooms around the pointer, drag pans, Fit frames the graph.
+let scale = 1;
+let offsetX = 0;
+let offsetY = 0;
+
+function applyTransform() {
+  viewport.setAttribute("transform", `translate(${offsetX} ${offsetY}) scale(${scale})`);
+}
+
+function fit() {
+  const rect = svg.getBoundingClientRect();
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  const padding = 48;
+  scale = Math.min((rect.width - padding * 2) / width, (rect.height - padding * 2) / height, 1.3);
+  offsetX = (rect.width - width * scale) / 2 - bounds.minX * scale;
+  offsetY = (rect.height - height * scale) / 2 - bounds.minY * scale;
+  applyTransform();
+}
+
+svg.addEventListener("wheel", event => {
+  event.preventDefault();
+  const rect = svg.getBoundingClientRect();
+  const px = event.clientX - rect.left;
+  const py = event.clientY - rect.top;
+  const factor = Math.exp(-event.deltaY * 0.0015);
+  const next = Math.min(2.5, Math.max(0.3, scale * factor));
+  offsetX = px - (px - offsetX) * (next / scale);
+  offsetY = py - (py - offsetY) * (next / scale);
+  scale = next;
+  applyTransform();
+}, { passive: false });
+
+let dragging = null;
+
+svg.addEventListener("pointerdown", event => {
+  if (event.target.closest(".node")) return;
+  dragging = { x: event.clientX - offsetX, y: event.clientY - offsetY };
+  svg.setPointerCapture(event.pointerId);
+  svg.classList.add("dragging");
+});
+
+svg.addEventListener("pointermove", event => {
+  if (!dragging) return;
+  offsetX = event.clientX - dragging.x;
+  offsetY = event.clientY - dragging.y;
+  applyTransform();
+});
+
+const endDrag = () => { dragging = null; svg.classList.remove("dragging"); };
+svg.addEventListener("pointerup", endDrag);
+svg.addEventListener("pointercancel", endDrag);
+
+svg.addEventListener("click", event => {
+  if (!event.target.closest(".node") && selected) clearSelection();
+});
+
+document.addEventListener("keydown", event => {
+  const inField = event.target instanceof HTMLElement && ["TEXTAREA", "INPUT"].includes(event.target.tagName);
+  if (event.key === "Escape") {
+    if (!document.getElementById("codeWindow").hidden) closeCode();
+    else if (!document.getElementById("qa").hidden) closeQA();
+    else if (selected) clearSelection();
+    return;
+  }
+
+  if (inField) return;
+  if (event.key === "q") openQA();
+});
+
+document.getElementById("fit").addEventListener("click", fit);
+document.getElementById("clear").addEventListener("click", clearSelection);
+window.addEventListener("resize", fit);
+
+loadPending();
+document.title = MAP.title || "Map";
+document.getElementById("mapTitle").textContent = MAP.title;
+document.getElementById("mapSource").textContent = MAP.source;
+
+render();
+renderSpec();
+fit();
+</script>

@@ -1,0 +1,164 @@
+title: Clauded — design map
+source: session 2026-08-23 · dev/DECISIONS.md pending
+spec:
+  nodes: aspect · question · decision · rejected alternative
+  sources:
+  - dev/DECISIONS.md — closed decisions
+  - 'dev/PLAN.md ## Fog — open questions'
+  - dev/PLAN.md Decide steps
+  edge: belongs to aspect · answers question · rejected in favour of
+nodes:
+- id: a-contract
+  kind: aspect
+  title: Map contract
+  body: 'What the map is and where its content comes from. Settled first: every later choice
+    depends on whether the map may hold knowledge of its own.'
+  origin: session, 2026-08-23
+- id: a-render
+  kind: aspect
+  title: Rendering and storage
+  body: How the map turns into something you can look at, and where each part of it lives
+    in the repository.
+  origin: session, 2026-08-23
+- id: a-interaction
+  kind: aspect
+  title: Walking the graph
+  body: What a click does. The mode exists for reading a graph by walking it, so this aspect
+    decides whether the mode is worth having.
+  origin: session, 2026-08-23
+- id: d-derived
+  kind: decision
+  status: decided
+  title: The map is derived, never authored
+  body: Source documents hold the knowledge; the map is generated from them and can be thrown
+    away at any time.
+  why: A map that holds knowledge of its own drifts from the code, and 14.4 already says a
+    stale diagram is worse than none.
+  cost: Anything the map should show has to exist in a source document first — including edges.
+  origin: session decision, 2026-08-23
+- id: d-split
+  kind: decision
+  status: decided
+  title: Data and view are separate files
+  body: Map data lives in dev/design/ under git; the view is one self-contained HTML file
+    that reads it.
+  why: 'Edmond asked for both ways of opening a map: locally from the repository and as a
+    published artifact. One data file feeds both.'
+  cost: The data file needs its own format and a check that it stays in step with the sources.
+  origin: session decision, 2026-08-23
+  refs:
+  - file: tools/build-map.py
+    lines: 84-111
+- id: d-two-vocab
+  kind: decision
+  status: decided
+  title: One engine, two vocabularies
+  body: The design map speaks aspect / question / decision / rejected. The architecture map
+    speaks module / class / knowledge / dependency. Layout, panel and navigation are shared.
+  why: The two maps look alike and read alike; only their content differs, so splitting the
+    renderer would double the work for nothing.
+  cost: The shared layer has to stay free of either vocabulary.
+  origin: session decision, 2026-08-23
+  refs:
+  - file: web/map-template.html
+    lines: 1469-1490
+- id: d-self-spec
+  kind: decision
+  status: decided
+  title: Each map carries its own spec
+  body: The map declares which nodes it holds, which files it reads and what an edge means.
+    The spec is written when the map is created.
+  why: 'Edmond: what a map takes and from where is described at creation time, not fixed once
+    for all maps.'
+  cost: Two maps of the same project can disagree about what a node is; nothing checks that.
+  origin: session decision, 2026-08-23
+- id: q-panel
+  kind: question
+  status: open
+  title: 'Long text: side panel or popover?'
+  body: A node carries several paragraphs — the decision, its reason, its price. Where does
+    that text appear?
+  why: Panel keeps the graph in place and holds long text, but eats a fifth of the screen.
+    A popover keeps the graph full-width and dies on long text.
+  origin: open, this session
+  options:
+  - side panel
+  - popover
+  - both, panel by default
+  refs:
+  - file: web/map-template.html
+    lines: 1494-1520
+- id: q-format
+  kind: decision
+  status: decided
+  title: Map data is YAML in the repository
+  body: The map source is dev/design/<name>.map.yaml, edited by hand and reviewed as text.
+  why: 'Edmond chose YAML: it is read and edited by a person, while the page carries the same
+    data as a literal.'
+  origin: open, this session
+- id: q-trigger
+  kind: question
+  status: open
+  title: How the mode is entered
+  body: A trigger phrase, a slash command, or an entry in the skill table that fires on the
+    word `map`.
+  origin: open, this session
+  options:
+  - slash command
+  - trigger phrase
+  - skill pointer only
+- id: r-plantuml
+  kind: rejected
+  status: rejected
+  title: PlantUML, as 14.4 requires
+  body: The rule already names PlantUML for dev/design/ diagrams.
+  why: 'It renders a picture and stops there: no click, no hidden text, no walking. Edmond:
+    PlantUML is not good enough.'
+  origin: rejected, this session
+- id: r-program
+  kind: rejected
+  status: rejected
+  title: A generator program in dev/tools/
+  body: A script that reads the sources and writes the data file.
+  why: Edmond may write it later; until then the map is assembled by hand, so the mode must
+    work without a program.
+  origin: postponed, this session
+- id: r-map-source
+  kind: rejected
+  status: rejected
+  title: The map as the source of truth
+  body: Design questions would be written into the map and the documents generated from it.
+  why: 'Rejected with the first decision: two sources of truth for the same knowledge is the
+    drift that 14.4 warns about.'
+  origin: rejected, this session
+edges:
+- - a-contract
+  - d-derived
+  - holds
+- - a-contract
+  - d-self-spec
+  - holds
+- - a-render
+  - d-split
+  - holds
+- - a-render
+  - d-two-vocab
+  - holds
+- - a-render
+  - q-format
+  - holds
+- - a-interaction
+  - q-panel
+  - holds
+- - a-interaction
+  - q-trigger
+  - holds
+- - d-derived
+  - r-map-source
+  - rejects
+- - d-split
+  - r-plantuml
+  - rejects
+- - d-split
+  - r-program
+  - rejects
