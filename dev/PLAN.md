@@ -48,8 +48,11 @@ collects questions onto a map and does nothing until Edmond presses Apply.
 - [x] S3.6 Reach the session without a waiting call
       done: a Stop hook drains the map's inbox and blocks the stop; checked — silent when empty, delivers once, silent again
       handoff: a blocking call dies on any terminal input, which is why waiting alone never worked
-- [ ] S3.7 The channel, for a session that is idle rather than working
-      done: a message on the map wakes a session that is not in a turn at all
+- [x] S3.7 Hold the conversation without the main session
+      done: a background subagent runs wait → reply → wait and survives terminal input; seen running while Edmond typed
+      handoff: the Stop hook only fires at the end of a turn, so an idle session never reacts on its own
+- [ ] S3.8 The channel, so no agent has to be held open at all
+      done: a message on the map wakes a session that is not in a turn
       tier: T2
 
 ## S5 — One conversation  [done]
