@@ -30,6 +30,14 @@ import mapkit
 STATE_DIR = ".clauded"
 MAX_BODY = 1 << 20
 
+# Bumped whenever a tool writes a map, so a page can tell it must refetch even
+# when two writes land in the same second.
+GENERATION = [0]
+
+
+def map_changed():
+    GENERATION[0] += 1
+
 
 def maps_in(root):
     """Returns {name: path} for every map of the project, by file name."""
@@ -77,15 +85,17 @@ class State:
         # When Claude was last seen doing anything for this map. A blocked wait
         # is only one of the states: between them Claude is working, not gone.
         self.last_seen = 0.0
-        # Set when the reader presses "End conversation": whoever is waiting
-        # learns the talk is over instead of hanging until a timeout.
+        # Set when the reader ends the round: whoever is waiting learns the talk
+        # is over instead of hanging until a timeout.
         self.ended = False
         # How many of the reader's messages have already been handed to Claude,
         # so the same line is not delivered twice.
         self.delivered = 0
         # Every message gets an id unique across restarts, so a page that
         # remembers more than the server does can still tell what is new.
-        self.origin = str(int(time.time()))
+        # The pid keeps two servers started in the same second from minting the
+        # same message ids.
+        self.origin = f"{int(time.time())}-{os.getpid()}"
         self.counter = 0
         self._restore()
 
@@ -101,6 +111,7 @@ class State:
             return
 
         self.chat = [m for m in data.get("chat", []) if isinstance(m, dict)]
+        self.delivered = int(data.get("delivered") or 0)
         # A message saved before ids existed still needs one: without it the
         # page treats the same reply as new on every poll.
         for index, message in enumerate(self.chat, start=1):
@@ -136,6 +147,7 @@ class State:
                 "selection": self.selection,
                 "chat": list(self.chat),
                 "listeners": self.listeners,
+                "delivered": self.delivered,
                 "ended": self.ended,
                 "resolved": dict(self.resolved),
                 "applied": self.applied,
@@ -282,6 +294,28 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(200, index_page(root, maps_in(root)))
             return
 
+        if path.startswith("/api/map/"):
+            name = path[len("/api/map/"):].strip("/")
+            source = maps_in(self.server.root).get(name)
+            if source is None:
+                self.json_reply(404, {"error": f"no map named {name}"})
+                return
+
+            try:
+                data = mapkit.load(source)
+                problems = mapkit.validate(data)
+                if not problems:
+                    problems = mapkit.collect_fragments(data, self.server.root, coloured=True)
+                if problems:
+                    self.json_reply(422, {"error": problems})
+                    return
+            except Exception as error:
+                self.json_reply(500, {"error": str(error)})
+                return
+
+            self.json_reply(200, data)
+            return
+
         if path == "/api/inbox":
             state = self.server.state
             # Draining the inbox is Claude reaching for the map, which is as
@@ -295,6 +329,7 @@ class Handler(BaseHTTPRequestHandler):
             snapshot = state.snapshot()
             self.json_reply(200, {
                 "build": mapkit.build_stamp(),
+                "map": self.map_stamp(),
                 "presence": self.server.state.presence(),
                 "ended": snapshot["ended"],
                 "focus": snapshot["focus"],
@@ -325,6 +360,17 @@ class Handler(BaseHTTPRequestHandler):
 
         self.reply(200, page)
 
+    def map_stamp(self):
+        """
+        A stamp that changes whenever the map's data does.
+
+        Two parts: what the files say now, and how many writes this server has
+        made — a file written twice within one clock tick still moves the stamp.
+        """
+        names = maps_in(self.server.root)
+        stamps = sorted(f"{name}:{mapkit.map_stamp(path)}" for name, path in names.items())
+        return f"{GENERATION[0]}|" + "|".join(stamps)
+
     def do_POST(self):
         path = unquote(self.path.split("?")[0])
         known = {"/api/apply", "/api/selection", "/api/message", "/api/end"}
@@ -354,7 +400,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/message":
             state.add_message("you", payload.get("text", ""), payload.get("about"))
         else:
-            state.update(applied=payload, focus=None)
+            # Apply is the end of the round: whoever waits stops waiting.
+            state.add_message("you", payload.get("summary") or "Работа принята.", None)
+            state.update(applied=payload, focus=None, ended=True)
 
         self.json_reply(200, {"ok": True})
 

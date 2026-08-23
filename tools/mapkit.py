@@ -8,6 +8,7 @@ the fragment as plain text.
 
 import html
 import json
+import os
 import re
 from pathlib import Path
 
@@ -21,6 +22,7 @@ DESIGN_KINDS = {"aspect", "question", "decision", "rejected"}
 ARCHITECTURE_KINDS = {"aspect", "module", "knowledge", "dependency"}
 # holds draws a solid line; rejects and needs draw dashed ones.
 RELATIONS = {"holds", "rejects", "needs"}
+STATUSES = {"open", "decided", "rejected"}
 MAX_FRAGMENT_LINES = 400
 
 SPAN = re.compile(r"<span[^>]*>|</span>")
@@ -29,6 +31,31 @@ SPAN = re.compile(r"<span[^>]*>|</span>")
 def load(path):
     """Reads a map file. Raises the YAML error as is: it names line and column."""
     return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+
+def save(path, data, seen=None):
+    """
+    Writes a map back, keeping the field order the file already uses.
+
+    The write goes to a neighbouring file and is renamed into place, so a reader
+    never sees half a document. `seen` is the stamp the caller read the file at:
+    if the file moved on since then, someone else wrote it and this write is
+    refused rather than silently winning.
+    """
+    path = Path(path)
+    if seen is not None and path.exists() and map_stamp(path) != seen:
+        raise ValueError(f"{path} changed since it was read — reload and try again")
+
+    text = yaml.dump(data, allow_unicode=True, sort_keys=False, width=88, default_flow_style=False)
+    temporary = path.with_suffix(path.suffix + ".writing")
+    temporary.write_text(text, encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def map_stamp(path):
+    """Identifies the map's data precisely enough to catch two writes a second apart."""
+    state = Path(path).stat()
+    return f"{state.st_mtime_ns}-{state.st_size}"
 
 
 def validate(data):
@@ -45,7 +72,15 @@ def validate(data):
     seen = set()
 
     for index, node in enumerate(data["nodes"]):
+        if not isinstance(node, dict):
+            problems.append(f"node #{index + 1}: expected a mapping, not {type(node).__name__}")
+            continue
+
         where = node.get("id") or f"node #{index + 1}"
+        if node.get("status") and node["status"] not in STATUSES:
+            problems.append(f"{where}: unknown status '{node['status']}'")
+        if node.get("kind") == "question" and not node.get("status"):
+            problems.append(f"{where}: a question needs a status, usually open")
         for field in REQUIRED_NODE_FIELDS:
             if not node.get(field):
                 problems.append(f"{where}: field '{field}' is missing")
@@ -181,7 +216,8 @@ def render(data, template=None):
     path = Path(template or TEMPLATE)
     text = path.read_text(encoding="utf-8")
     text = text.replace('const BUILD = "dev";', f'const BUILD = "{build_stamp(path)}";', 1)
-    literal = "const MAP = " + json.dumps(data, ensure_ascii=False, indent=2) + ";"
+    # A "</script>" anywhere in the data would close the tag the literal sits in.
+    literal = "const MAP = " + json.dumps(data, ensure_ascii=False, indent=2).replace("</", "<\\/") + ";"
     page, count = re.subn(r"const MAP = \{.*?\n\};", lambda _: literal, text, count=1, flags=re.S)
     if count != 1:
         raise ValueError("no MAP literal to replace — the template changed shape")

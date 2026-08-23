@@ -5,6 +5,10 @@ Speaks JSON-RPC over stdin and stdout, one message per line, and runs the local
 map server in the same process. Four tools:
 
     open_map          render a map and hand back its address
+    open_questions    what is still open on the map, so the round has an end
+    add_node          write a new node into the map while the talk goes on
+    edit_node         change what a node says
+    remove_node       take a node off the map when it turned out wrong
     select_on_map     point at a node without waiting for anything
     read_state        what is selected, and every thread as it stands
     ask_on_map        point at one question and wait for the next thing said there
@@ -25,7 +29,9 @@ import webbrowser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
+import mapkit
 import maps
 
 PROTOCOL = "2024-11-05"
@@ -49,6 +55,72 @@ TOOLS = [
         "name": "read_state",
         "description": "What the open map shows now: the selected node, the whole conversation, what is settled, and the last Apply. Does not wait.",
         "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "open_questions",
+        "description": "The questions still open on a map, in order, with the ones already settled left out. Empty means the round is over.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
+            },
+        },
+    },
+    {
+        "name": "add_node",
+        "description": "Add a node to the map while talking — a question that came up, a decision just taken, an option rejected. Writes the map's YAML, so the page picks it up.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Short id, latin, dashes: q-cache-size"},
+                "kind": {"type": "string", "description": "aspect | question | decision | rejected | module | knowledge | dependency"},
+                "title": {"type": "string", "description": "One line, the node's name"},
+                "body": {"type": "string", "description": "What it is, in a sentence or three"},
+                "why": {"type": "string", "description": "Why it stands, if the source says"},
+                "cost": {"type": "string", "description": "What it costs, if anything"},
+                "status": {"type": "string", "description": "open | decided | rejected, for design maps"},
+                "options": {"type": "array", "items": {"type": "string"}, "description": "Named alternatives, for a question"},
+                "origin": {"type": "string", "description": "Where it came from; defaults to this conversation"},
+                "edges": {
+                    "type": "array",
+                    "description": "Edges to add, each [from, to, relation] with relation holds | rejects | needs",
+                    "items": {"type": "array", "items": {"type": "string"}}
+                },
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
+            },
+            "required": ["id", "kind", "title", "body"],
+        },
+    },
+    {
+        "name": "edit_node",
+        "description": "Change a node already on the map — its title, text, reason, price, status or options. Only the fields you pass are touched.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Node id to change"},
+                "title": {"type": "string"},
+                "body": {"type": "string"},
+                "why": {"type": "string"},
+                "cost": {"type": "string"},
+                "status": {"type": "string", "description": "open | decided | rejected"},
+                "kind": {"type": "string", "description": "aspect | question | decision | rejected | module | knowledge | dependency"},
+                "options": {"type": "array", "items": {"type": "string"}},
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
+            },
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "remove_node",
+        "description": "Take a node off the map, with every edge that touched it. Use when a node turned out to be wrong, not merely settled.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "Node id to remove"},
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
+            },
+            "required": ["id"],
+        },
     },
     {
         "name": "select_on_map",
@@ -138,6 +210,7 @@ class Session:
         self.server = None
         self.state = None
         self.url = None
+        self.last_map = None
 
     def ensure(self):
         with self.lock:
@@ -175,6 +248,7 @@ def tool_open_map(session, args):
         return (f"No map named {name}. Maps under {session.root}: {listing}. "
                 "Name the project root with `project`, or pass the path to the .map.yaml file.")
 
+    session.last_map = name
     address = f"{url}/map/{name}"
     if args.get("browser", True):
         webbrowser.open(address)
@@ -191,6 +265,149 @@ def said_by_reader(snapshot, seen):
     """The reader's messages beyond the ones already counted."""
     mine = [m for m in snapshot["chat"] if m["role"] == "you"]
     return mine[seen:] or None
+
+
+def tool_open_questions(session, args):
+    state, _ = session.ensure()
+    known = maps.maps_in(session.root)
+    name = args.get("name") or session.last_map
+    source = known.get(name)
+
+    if source is None:
+        listing = ", ".join(known) or "none"
+        return f"No map named {name}. Maps under {session.root}: {listing}."
+
+    data = mapkit.load(source)
+    settled = set(state.snapshot()["resolved"])
+    questions = [
+        {"node": node["id"], "title": node["title"], "options": node.get("options") or []}
+        for node in data["nodes"]
+        if node.get("kind") == "question" and node.get("status") == "open" and node["id"] not in settled
+    ]
+
+    return json.dumps({"map": name, "open": questions}, ensure_ascii=False, indent=2)
+
+
+def tool_add_node(session, args):
+    session.ensure()
+    known = maps.maps_in(session.root)
+    name = args.get("name") or session.last_map
+    source = known.get(name)
+
+    if source is None:
+        listing = ", ".join(known) or "none"
+        return f"No map named {name}. Maps under {session.root}: {listing}."
+
+    data = mapkit.load(source)
+    seen = mapkit.map_stamp(source)
+    if any(node["id"] == args["id"] for node in data["nodes"]):
+        return f"{args['id']} is already on the map."
+
+    node = {
+        "id": args["id"],
+        "kind": args["kind"],
+        "title": args["title"],
+        "body": args["body"],
+        "origin": args.get("origin") or "added while talking on the map",
+    }
+    for field in ("why", "cost", "status", "options"):
+        if args.get(field):
+            node[field] = args[field]
+
+    if node["kind"] == "question" and "status" not in node:
+        node["status"] = "open"
+
+    data["nodes"].append(node)
+    for edge in args.get("edges") or []:
+        data["edges"].append(list(edge))
+
+    problems = mapkit.validate(data)
+    if problems:
+        return "The node would break the map:\n" + "\n".join(problems)
+
+    failed = write_map(source, data, seen)
+    if failed:
+        return failed
+
+    return f"{args['id']} is on the map, and {source} now holds it."
+
+
+def open_map_file(session, args):
+    """
+    Returns (path, data, stamp) for the map a tool names, or (None, message, None).
+
+    The stamp is taken with the read: writing quotes it back, so a file someone
+    else changed in between is not overwritten.
+    """
+    session.ensure()
+    known = maps.maps_in(session.root)
+    name = args.get("name") or session.last_map
+    source = known.get(name)
+
+    if source is None:
+        listing = ", ".join(known) or "none"
+        return None, f"No map named {name}. Maps under {session.root}: {listing}.", None
+
+    return source, mapkit.load(source), mapkit.map_stamp(source)
+
+
+def write_map(source, data, seen):
+    """Saves a map and tells the server its data moved; returns an error, or None."""
+    try:
+        mapkit.save(source, data, seen=seen)
+    except ValueError as error:
+        return str(error)
+
+    maps.map_changed()
+    return None
+
+
+def tool_edit_node(session, args):
+    source, data, seen = open_map_file(session, args)
+    if source is None:
+        return data
+
+    node = next((n for n in data["nodes"] if n["id"] == args["id"]), None)
+    if node is None:
+        return f"{args['id']} is not on this map."
+
+    for field in ("title", "body", "why", "cost", "status", "kind", "options"):
+        if args.get(field) is not None:
+            node[field] = args[field]
+
+    problems = mapkit.validate(data)
+    if problems:
+        return "The change would break the map:\n" + "\n".join(problems)
+
+    failed = write_map(source, data, seen)
+    if failed:
+        return failed
+
+    return f"{args['id']} updated in {source}."
+
+
+def tool_remove_node(session, args):
+    source, data, seen = open_map_file(session, args)
+    if source is None:
+        return data
+
+    node_id = args["id"]
+    if not any(n["id"] == node_id for n in data["nodes"]):
+        return f"{node_id} is not on this map."
+
+    data["nodes"] = [n for n in data["nodes"] if n["id"] != node_id]
+    dropped = [e for e in data["edges"] if node_id in (e[0], e[1])]
+    data["edges"] = [e for e in data["edges"] if node_id not in (e[0], e[1])]
+
+    problems = mapkit.validate(data)
+    if problems:
+        return "Removing it would break the map:\n" + "\n".join(problems)
+
+    failed = write_map(source, data, seen)
+    if failed:
+        return failed
+
+    return f"{node_id} removed from {source}, along with {len(dropped)} edge(s)."
 
 
 def tool_select_on_map(session, args):
@@ -239,10 +456,43 @@ def tool_wait_for_message(session, args):
 
 
 def tool_resolve_on_map(session, args):
+    """
+    Settles a question on the map and in the file behind it: the node stops
+    being a question and becomes the decision that was taken, so the record
+    survives the conversation.
+    """
     state, _ = session.ensure()
-    state.add_message("claude", f"Settled: {args['answer']}", args["node"])
-    state.resolve(args["node"], args["answer"])
-    return f"{args['node']} is marked settled: {args['answer']}"
+    node_id = args["node"]
+    answer = args["answer"]
+
+    state.add_message("claude", f"Settled: {answer}", node_id)
+    state.resolve(node_id, answer)
+
+    known = maps.maps_in(session.root)
+    source = known.get(session.last_map)
+    if source is None:
+        return f"{node_id} is settled on the map: {answer}. No file to write — no map is open."
+
+    data = mapkit.load(source)
+    seen = mapkit.map_stamp(source)
+    node = next((n for n in data["nodes"] if n["id"] == node_id), None)
+    if node is None:
+        return f"{node_id} is settled on the map: {answer}. The file holds no such node."
+
+    node["kind"] = "decision"
+    node["status"] = "decided"
+    node["why"] = (node.get("why") + " " if node.get("why") else "") + f"Settled on the map: {answer}"
+    node.pop("options", None)
+
+    problems = mapkit.validate(data)
+    if problems:
+        return f"{node_id} is settled on the map, but the file was left alone:\n" + "\n".join(problems)
+
+    failed = write_map(source, data, seen)
+    if failed:
+        return f"{node_id} is settled on the map, but the file was not written: {failed}"
+
+    return f"{node_id} is settled: {answer}. {source} now records it as a decision."
 
 
 def tool_reply_on_map(session, args):
@@ -268,6 +518,10 @@ def tool_wait_for_apply(session, args):
 
 HANDLERS = {
     "open_map": tool_open_map,
+    "open_questions": tool_open_questions,
+    "add_node": tool_add_node,
+    "edit_node": tool_edit_node,
+    "remove_node": tool_remove_node,
     "select_on_map": tool_select_on_map,
     "read_state": tool_read_state,
     "ask_on_map": tool_ask_on_map,

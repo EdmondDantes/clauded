@@ -205,17 +205,29 @@
     min-height: 0;
   }
 
-  /* Side: the dock stands to the right, its two panes stacked. */
+  /* Side: the dock stands against one edge of the graph. */
   main[data-layout="side"] {
     grid-template-columns: minmax(0, 1fr) auto var(--dock);
     grid-template-rows: minmax(0, 1fr);
   }
 
+  main[data-layout="side"][data-side="left"] {
+    grid-template-columns: var(--dock) auto minmax(0, 1fr);
+  }
+
+  main[data-layout="side"][data-side="left"] .dock { order: 1; border-right: 1px solid var(--line); border-left: none; }
+  main[data-layout="side"][data-side="left"] > .split { order: 2; }
+  main[data-layout="side"][data-side="left"] .stage { order: 3; }
+
   main[data-layout="side"] .dock {
     display: grid;
-    grid-template-rows: var(--record) auto minmax(0, 1fr);
     border-left: 1px solid var(--line);
   }
+
+  /* Inside the dock the two panes either stack or stand side by side. */
+  main[data-layout="side"][data-flow="stack"] .dock { grid-template-rows: var(--record) auto minmax(0, 1fr); }
+  main[data-layout="side"][data-flow="row"] .dock { grid-template-columns: var(--record) auto minmax(0, 1fr); }
+  main[data-layout="side"][data-flow="row"] .dock > .split { width: 5px; height: auto; cursor: col-resize; }
 
   /* Bottom: the dock lies under the graph, its two panes side by side. */
   main[data-layout="bottom"] {
@@ -225,16 +237,21 @@
 
   main[data-layout="bottom"] .dock {
     display: grid;
-    grid-template-columns: var(--record) auto minmax(0, 1fr);
     border-top: 1px solid var(--line);
   }
+
+  main[data-layout="bottom"][data-flow="row"] .dock { grid-template-columns: var(--record) auto minmax(0, 1fr); }
+  main[data-layout="bottom"][data-flow="stack"] .dock { grid-template-rows: var(--record) auto minmax(0, 1fr); }
+  main[data-layout="bottom"][data-flow="stack"] .dock > .split { height: 5px; width: auto; cursor: row-resize; }
 
   main[data-order="chat-first"] .record-pane { order: 3; }
   main[data-order="chat-first"] .chat-pane { order: 1; }
   main[data-order="chat-first"] .dock > .split { order: 2; }
 
-  main[data-layout="side"][data-order="chat-first"] .dock { grid-template-rows: minmax(0, 1fr) auto var(--record); }
-  main[data-layout="bottom"][data-order="chat-first"] .dock { grid-template-columns: minmax(0, 1fr) auto var(--record); }
+  main[data-layout="side"][data-flow="stack"][data-order="chat-first"] .dock { grid-template-rows: minmax(0, 1fr) auto var(--record); }
+  main[data-layout="side"][data-flow="row"][data-order="chat-first"] .dock { grid-template-columns: minmax(0, 1fr) auto var(--record); }
+  main[data-layout="bottom"][data-flow="row"][data-order="chat-first"] .dock { grid-template-columns: minmax(0, 1fr) auto var(--record); }
+  main[data-layout="bottom"][data-flow="stack"][data-order="chat-first"] .dock { grid-template-rows: minmax(0, 1fr) auto var(--record); }
 
   .dock { min-width: 0; min-height: 0; background: var(--surface); }
 
@@ -243,7 +260,7 @@
   .record-pane { align-content: start; padding: .8rem 1rem; overflow-y: auto; }
 
   .chat-pane {
-    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     gap: .55rem;
     padding: .8rem 1rem 1rem;
     min-height: 0;
@@ -562,6 +579,24 @@
   .node.settled .mark { fill: var(--decided); stroke: var(--decided); }
 
   /* A thread Claude has written to, which is not the one on screen. */
+  /* A node that has just been built, so its arrival is not silent. */
+  .node.fresh .plate { stroke: var(--accent); stroke-width: 2.5; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .node.fresh { animation: arrive .5s ease-out; }
+    .node.fresh .plate { animation: glow 1.8s ease-in-out 3; }
+  }
+
+  @keyframes arrive {
+    from { opacity: 0; transform: translateY(-8px) scale(.96); }
+    to { opacity: 1; }
+  }
+
+  @keyframes glow {
+    0%, 100% { stroke-opacity: 1; }
+    50% { stroke-opacity: .3; }
+  }
+
   .node.unread .plate { stroke: var(--accent); stroke-width: 2.5; }
   .node.unread .kind { fill: var(--accent); }
   .node.unread .plate + .mark { filter: none; }
@@ -926,6 +961,7 @@
   .msg.you { justify-self: end; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
   .msg.claude { justify-self: start; background: var(--surface-sunk); border: 1px solid var(--line); }
   .msg.pending { border-style: dashed; }
+  .msg.undelivered { border-color: var(--rejected); color: var(--rejected); }
 
   .msg.typing { display: flex; gap: .25rem; align-items: center; padding: .45rem .6rem; }
 
@@ -1136,7 +1172,7 @@
 
 <div class="code-window" id="codeWindow" hidden role="dialog" aria-modal="true" aria-label="Source fragment"></div>
 
-<main id="main" data-layout="side" data-order="record-first">
+<main id="main" data-layout="side" data-side="right" data-flow="stack" data-order="record-first">
   <div class="stage">
     <svg id="canvas" role="application" aria-label="Design decision map"></svg>
     <div class="toast" id="toast" role="status" hidden></div>
@@ -1166,8 +1202,7 @@
         <textarea id="chatField" rows="2" placeholder="Enter sends · Shift+Enter for a new line"></textarea>
         <button type="button" id="chatSend">Send</button>
       </div>
-      <button type="button" class="end-talk" id="chatEnd">End the conversation</button>
-    </section>
+      </section>
   </div>
 </main>
 
@@ -1224,6 +1259,7 @@ const ROW_GAP = 18;
 const svg = document.getElementById("canvas");
 const panel = document.getElementById("panel");
 const byId = new Map(MAP.nodes.map(n => [n.id, n]));
+
 
 // One hue per aspect. The nodes and edges of an aspect's subtree take its hue,
 // so a glance at a line says which aspect it belongs to.
@@ -1369,6 +1405,7 @@ let nodeShapes = new Map();
 let selected = null;
 let waiting = null;
 let presence = "offline";
+let mapStamp = null;
 const settled = new Map();
 const unread = new Set();
 
@@ -1579,28 +1616,31 @@ function renderAspectBar() {
   controls.className = "layout-controls";
   controls.style.marginLeft = "auto";
 
-  const flip = document.createElement("button");
-  flip.type = "button";
-  flip.title = "Put the panels beside the graph, or under it";
-  flip.textContent = main.dataset.layout === "side" ? "▤ side" : "▥ bottom";
-  flip.addEventListener("click", () => {
-    main.dataset.layout = main.dataset.layout === "side" ? "bottom" : "side";
-    saveLayout();
-    renderAspectBar();
-    fit();
-  });
+  const toggle = (title, label, change) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.title = title;
+    button.textContent = label;
+    button.addEventListener("click", () => {
+      change();
+      saveLayout();
+      renderAspectBar();
+      fit();
+    });
+    return button;
+  };
 
-  const swap = document.createElement("button");
-  swap.type = "button";
-  swap.title = "Swap the record and the conversation";
-  swap.textContent = "⇄";
-  swap.addEventListener("click", () => {
-    main.dataset.order = main.dataset.order === "chat-first" ? "record-first" : "chat-first";
-    saveLayout();
-    fit();
-  });
-
-  controls.append(flip, swap);
+  controls.append(
+    toggle("Panels beside the graph, or under it", main.dataset.layout === "side" ? "▤ side" : "▥ bottom",
+      () => { main.dataset.layout = main.dataset.layout === "side" ? "bottom" : "side"; }),
+    toggle("Which edge the panels sit against", main.dataset.side === "left" ? "⇤ left" : "⇥ right",
+      () => { main.dataset.side = main.dataset.side === "left" ? "right" : "left"; }),
+    toggle("Record and conversation: side by side, or one above the other",
+      main.dataset.flow === "row" ? "◫ side by side" : "▤ stacked",
+      () => { main.dataset.flow = main.dataset.flow === "row" ? "stack" : "row"; }),
+    toggle("Swap the record and the conversation", "⇄",
+      () => { main.dataset.order = main.dataset.order === "chat-first" ? "record-first" : "chat-first"; })
+  );
   bar.append(controls);
 
   const qa = document.createElement("button");
@@ -1815,8 +1855,11 @@ function renderChat() {
     lastSubject = message.about;
 
     const line = document.createElement("div");
-    line.className = "msg " + message.role + (message.role === "you" && !message.applied ? " pending" : "");
+    line.className = "msg " + message.role
+      + (message.role === "you" && !message.applied ? " pending" : "")
+      + (message.undelivered ? " undelivered" : "");
     line.textContent = message.text;
+    if (message.undelivered) line.title = "Not delivered yet";
     log.append(line);
   }
 
@@ -1904,7 +1947,35 @@ function say(text, about = selected) {
   pending.chat.push(message);
   commitPending();
   renderChat();
-  window.mapBridge?.message(text, about);
+  deliver(message);
+}
+
+/**
+ * Hands one line to the server, and remembers if it did not arrive: a line the
+ * server never saw would otherwise sit in the log looking sent while Claude
+ * waits for something that never comes.
+ */
+function deliver(message) {
+  if (!window.mapBridge) return;
+
+  window.mapBridge.message(message.text, message.about).then(() => {
+    delete message.undelivered;
+    savePending();
+    renderChat();
+  }).catch(() => {
+    message.undelivered = true;
+    savePending();
+    renderChat();
+    toast("Not delivered — will try again");
+  });
+}
+
+/** Sends again whatever never reached the server. */
+function resend() {
+  if (!window.mapBridge) return;
+  for (const message of pending.chat) {
+    if (message.role === "you" && message.undelivered && !message.id) deliver(message);
+  }
 }
 
 /**
@@ -1974,6 +2045,70 @@ function questionForm(node) {
   return box;
 }
 
+/**
+ * Takes the map's data again after it changed on disk and grows the graph in
+ * place: new nodes arrive with a mark on them, so it is visible that they were
+ * just built rather than always there.
+ */
+async function growMap() {
+  const name = location.pathname.split("/").pop();
+
+  let next;
+  try {
+    next = await fetch(`/api/map/${name}`).then(response => response.ok ? response.json() : null);
+  } catch (error) {
+    return false;
+  }
+
+  if (!next || !Array.isArray(next.nodes)) return false;
+
+  // Compare what the map says, not where the layout happened to put it: x and
+  // y are written onto every node on each render.
+  const meaning = node => JSON.stringify([
+    node.kind, node.title, node.body, node.why, node.cost, node.status, node.options, node.refs
+  ]);
+
+  const before = new Map(MAP.nodes.map(node => [node.id, meaning(node)]));
+  const arrived = next.nodes.filter(node => !before.has(node.id));
+  const changed = next.nodes.filter(node =>
+    before.has(node.id) && before.get(node.id) !== meaning(node));
+  const gone = [...before.keys()].filter(id => !next.nodes.some(node => node.id === id));
+
+  MAP.nodes = next.nodes;
+  MAP.edges = next.edges;
+  MAP.spec = next.spec || MAP.spec;
+  byId.clear();
+  for (const node of MAP.nodes) byId.set(node.id, node);
+
+  const view = { scale, offsetX, offsetY };
+  render();
+
+  if (moved) {
+    scale = view.scale;
+    offsetX = view.offsetX;
+    offsetY = view.offsetY;
+    applyTransform();
+  } else {
+    fit();
+  }
+
+  for (const node of [...arrived, ...changed]) markFresh(node.id);
+
+  const said = [];
+  if (arrived.length) said.push(`new: ${arrived.map(node => node.title).join(", ")}`);
+  if (changed.length) said.push(`changed: ${changed.map(node => node.title).join(", ")}`);
+  if (gone.length) said.push(`removed: ${gone.length}`);
+  if (said.length) toast(said.join(" · "));
+
+  // Never move the reader's subject out from under them while they are writing.
+  const typing = document.getElementById("chatField").value.trim().length > 0;
+  if (arrived.length && !typing) select(arrived[arrived.length - 1].id);
+  else if (selected && byId.has(selected)) select(selected);
+  else if (selected) clearSelection();
+
+  return true;
+}
+
 /** Redraws what shows the conversation, so it stays current. */
 function refreshBlock() {
   renderChat();
@@ -1988,21 +2123,43 @@ function commitPending() {
   renderTally(visibleNodes(hidden));
 }
 
+/**
+ * Nodes built or changed in the last few seconds. Kept as state rather than a
+ * class on the element: the graph is redrawn whenever the map grows, and a
+ * class set on the old element would vanish with it.
+ */
+const fresh = new Map();
+const FRESH_FOR = 8000;
+
+function markFresh(id) {
+  fresh.set(id, Date.now());
+  renderNodeStates();
+  setTimeout(() => {
+    if (Date.now() - (fresh.get(id) || 0) >= FRESH_FOR - 50) {
+      fresh.delete(id);
+      renderNodeStates();
+    }
+  }, FRESH_FOR);
+}
+
 /** Marks the nodes that already carry an answer. */
 function renderNodeStates() {
   for (const [id, group] of nodeShapes) {
     group.classList.toggle("answered", answerOf(id) !== null);
     group.classList.toggle("settled", settled.has(id));
     group.classList.toggle("unread", unread.has(id));
+    group.classList.toggle("fresh", fresh.has(id));
   }
 }
 
 function updateApply() {
   const button = document.getElementById("applyButton");
   if (!button) return;
+  // This button ends the round: until it is pressed the work goes on.
   const count = pendingCount();
-  button.disabled = count === 0;
-  button.textContent = count ? `Apply ${count}` : "Nothing to apply";
+  button.disabled = false;
+  button.textContent = count ? `Finish · ${count} to hand over` : "Finish";
+  button.title = "Hand the conversation over and end the round";
 }
 
 /**
@@ -2011,7 +2168,6 @@ function updateApply() {
  * and the reader pastes it into the conversation.
  */
 async function applyPending() {
-  if (pendingCount() === 0) return;
 
   const lines = [`# ${MAP.title}`];
   for (const message of pending.chat) {
@@ -2140,6 +2296,7 @@ function closeCode() {
 // One question at a time: the same answering, shown one card at a time so the
 // reader is not asked to hold five open questions in their head at once.
 let qaIndex = 0;
+let qaNode = null;
 
 function openQuestions() {
   return visibleNodes(hidden)
@@ -2148,6 +2305,7 @@ function openQuestions() {
 
 function openQA(index = 0) {
   qaIndex = index;
+  qaNode = null;
   document.getElementById("qa").hidden = false;
   renderQA();
 }
@@ -2159,6 +2317,13 @@ function closeQA() {
 
 function renderQA() {
   const box = document.getElementById("qa");
+  // Keep what is half-written and where the caret sits: this redraws on every
+  // reply that arrives, and losing a sentence mid-word is unforgivable.
+  const old = box.querySelector("textarea");
+  const draft = old ? old.value : "";
+  const hadFocus = old && document.activeElement === old;
+  const caret = old ? old.selectionStart : 0;
+
   box.textContent = "";
 
   const questions = openQuestions();
@@ -2179,8 +2344,16 @@ function renderQA() {
     return;
   }
 
+  // Follow the question itself: settling another one shortens the list, and an
+  // index would then point at a different card than the reader was answering.
+  if (qaNode) {
+    const stillThere = questions.findIndex(question => question.id === qaNode);
+    if (stillThere >= 0) qaIndex = stillThere;
+  }
+
   qaIndex = Math.max(0, Math.min(qaIndex, questions.length - 1));
   const node = questions[qaIndex];
+  qaNode = node.id;
   const owner = aspectOwners();
   card.style.setProperty("--aspect-color", aspectColour.get(owner.get(node.id)) || "var(--accent)");
 
@@ -2249,6 +2422,15 @@ function renderQA() {
   actions.append(back, next, toMap);
   card.append(actions);
   box.append(card);
+
+  const field = box.querySelector("textarea");
+  if (field && draft) {
+    field.value = draft;
+    if (hadFocus) {
+      field.focus();
+      field.setSelectionRange(caret, caret);
+    }
+  }
 }
 
 /**
@@ -2294,6 +2476,7 @@ svg.addEventListener("wheel", event => {
   const rect = svg.getBoundingClientRect();
   const px = event.clientX - rect.left;
   const py = event.clientY - rect.top;
+  moved = true;
   const factor = Math.exp(-event.deltaY * 0.0015);
   const next = Math.min(2.5, Math.max(0.3, scale * factor));
   offsetX = px - (px - offsetX) * (next / scale);
@@ -2303,6 +2486,9 @@ svg.addEventListener("wheel", event => {
 }, { passive: false });
 
 let dragging = null;
+// Whether the reader has moved the view themselves; if they have, a map that
+// grows must not yank it back to the overview.
+let moved = false;
 const touches = new Map();
 let pinch = null;
 
@@ -2346,6 +2532,7 @@ svg.addEventListener("pointermove", event => {
   }
 
   if (!dragging) return;
+  moved = true;
   offsetX = event.clientX - dragging.x;
   offsetY = event.clientY - dragging.y;
   applyTransform();
@@ -2378,7 +2565,7 @@ document.addEventListener("keydown", event => {
   if (event.key === "q") openQA();
 });
 
-document.getElementById("fit").addEventListener("click", fit);
+document.getElementById("fit").addEventListener("click", () => { moved = false; fit(); });
 document.getElementById("clear").addEventListener("click", clearSelection);
 window.addEventListener("resize", fit);
 
@@ -2395,15 +2582,27 @@ if (location.protocol === "http:" || location.protocol === "https:") {
   window.mapBridge = {
     apply: payload => post("/api/apply", payload),
     select: id => post("/api/selection", { map: MAP.title, node: id }).catch(() => {}),
-    message: (text, about) => post("/api/message", { map: MAP.title, text, about }).catch(() => {})
+    message: (text, about) => post("/api/message", { map: MAP.title, text, about })
   };
 
   // Claude points at one question and replies in its thread; the page asks for
   // both on a timer, opens the question it is asked about, and shows the reply.
   let asked = null;
+  let ticking = false;
   setInterval(async () => {
+    if (ticking) return;
+    ticking = true;
     try {
       const news = await fetch("/api/updates").then(response => response.json());
+
+      // The map's own data changed — a node was added or settled while we
+      // watched — so the graph on screen is out of date.
+      if (mapStamp === null) mapStamp = news.map || "";
+      else if (news.map && news.map !== mapStamp) {
+        // Only accept the new stamp once the map actually came down; a failed
+        // fetch must be retried on the next tick, not forgotten.
+        if (await growMap()) mapStamp = news.map;
+      }
 
       if (news.build && BUILD !== "dev" && news.build !== BUILD) {
         toast("The map changed — reloading");
@@ -2450,6 +2649,7 @@ if (location.protocol === "http:" || location.protocol === "https:") {
         }
       }
 
+      resend();
       presence = news.presence || "offline";
       renderPresence();
       renderTyping();
@@ -2472,6 +2672,8 @@ if (location.protocol === "http:" || location.protocol === "https:") {
       toast(waiting.note || "Claude is waiting for this answer");
     } catch (error) {
       // The server went away; the page keeps working on its own.
+    } finally {
+      ticking = false;
     }
   }, 1500);
 }
@@ -2485,6 +2687,8 @@ function loadLayout() {
   try {
     const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}");
     if (saved.layout) main.dataset.layout = saved.layout;
+    if (saved.side) main.dataset.side = saved.side;
+    if (saved.flow) main.dataset.flow = saved.flow;
     if (saved.order) main.dataset.order = saved.order;
     if (saved.dock) main.style.setProperty("--dock", saved.dock);
     if (saved.record) main.style.setProperty("--record", saved.record);
@@ -2497,6 +2701,8 @@ function saveLayout() {
   try {
     localStorage.setItem(LAYOUT_KEY, JSON.stringify({
       layout: main.dataset.layout,
+      side: main.dataset.side,
+      flow: main.dataset.flow,
       order: main.dataset.order,
       dock: main.style.getPropertyValue("--dock").trim() || undefined,
       record: main.style.getPropertyValue("--record").trim() || undefined
@@ -2511,9 +2717,11 @@ function saveLayout() {
  * is depends on the orientation, so it is read at the start of each drag.
  */
 function draggable(handle, variable, invert) {
+  // Which screen axis a handle moves along depends on where the dock sits and
+  // whether its panes are stacked, so it is worked out at every drag.
   const axis = () => {
-    const vertical = main.dataset.layout === "side" ? variable === "--record" : variable === "--dock";
-    return vertical ? "y" : "x";
+    if (variable === "--dock") return main.dataset.layout === "side" ? "x" : "y";
+    return main.dataset.flow === "row" ? "x" : "y";
   };
 
   handle.addEventListener("pointerdown", event => {
@@ -2544,7 +2752,7 @@ function draggable(handle, variable, invert) {
   });
 }
 
-draggable(document.getElementById("splitMain"), "--dock", () => false);
+draggable(document.getElementById("splitMain"), "--dock", () => main.dataset.side === "left" && main.dataset.layout === "side");
 draggable(document.getElementById("splitDock"), "--record", () => main.dataset.order === "chat-first");
 
 loadLayout();
@@ -2557,16 +2765,6 @@ chatField.addEventListener("keydown", event => {
   if (!text) return;
   chatField.value = "";
   say(text);
-});
-
-document.getElementById("chatEnd").addEventListener("click", () => {
-  const text = "Разговор закончен.";
-  say(text);
-  if (window.mapBridge) fetch("/api/end", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ map: MAP.title, about: selected, text })
-  }).catch(() => {});
-  toast("Claude was told the conversation is over");
 });
 
 document.getElementById("chatSend").addEventListener("click", () => {

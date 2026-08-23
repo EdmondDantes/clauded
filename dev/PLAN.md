@@ -63,6 +63,34 @@ collects questions onto a map and does nothing until Edmond presses Apply.
 - [x] S5.2 Claude sets the subject as well
       done: select_on_map points at a node without waiting
 
+## S6 — What the review found  [in progress]
+
+Fable reviewed the live-map design on 2026-08-23. Fixed: the stamp is accepted
+only after a successful refetch; writes are atomic and quote the stamp they read;
+the stamp is nanosecond-precise and per map, with a generation counter behind it;
+an undelivered line is marked and resent; the poll no longer overlaps itself; the
+selection does not move while the reader types; the walkthrough keeps the draft
+and follows the question rather than a position; a settled question keeps the
+view where the reader put it; validate rejects an unknown status, a question
+without one, and a node that is not a mapping; a closing script tag in the data
+is escaped.
+
+- [ ] S6.1 State is one per project, not per map
+      done: two maps in one project keep separate chats, resolved marks and storage keys
+      tier: T2
+- [ ] S6.2 The conversation grows without bound
+      done: /api/updates serves from a given id, applied lines are trimmed on save
+      tier: T1
+- [ ] S6.3 A restart loses what was applied and re-delivers the inbox
+      done: applied flags and delivered count survive a restart
+      tier: T1
+- [ ] S6.4 The first poll accepts the stamp without comparing
+      done: the map stamp is baked into the page at render, like the build stamp
+      tier: T1
+- [ ] S6.5 A reload on a new build throws away a draft
+      done: the page does not reload while a field holds text
+      tier: T1
+
 ## S4 — The mode in the skill
 
 - [x] S4.1 Architecture map vocabulary against a real project
