@@ -402,6 +402,50 @@
 
   .answer textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+  .answer .send {
+    font: inherit;
+    font-size: var(--step-0);
+    justify-self: start;
+    padding: .3rem .85rem;
+    color: var(--surface);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .answer .send:hover { filter: brightness(1.08); }
+  .answer .send:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  .answer .saved, .answer .queued div {
+    display: flex;
+    align-items: flex-start;
+    gap: .5rem;
+    padding: .35rem .5rem;
+    font-size: var(--step-0);
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--decided);
+    border-radius: 3px;
+  }
+
+  .answer .queued { display: grid; gap: .3rem; }
+  .answer .queued div { border-left-color: var(--open); }
+
+  .answer .saved span, .answer .queued span { flex: 1; }
+
+  .answer .saved button, .answer .queued button {
+    font: inherit;
+    padding: 0 .2rem;
+    color: var(--ink-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    line-height: 1.2;
+  }
+
+  .answer .saved button:hover, .answer .queued button:hover { color: var(--rejected); }
+
   .node.answered .plate { stroke: var(--decided); stroke-dasharray: 5 3; }
 
   .toast {
@@ -1402,8 +1446,9 @@ function renderPanel(node, neighbours) {
 
 /**
  * Answering and asking, for any node. A question offers its options and a free
- * field; every node offers "ask about this", so the reader can walk the map and
- * turn a node into a question of their own.
+ * field; every node takes a question addressed to Claude. Both need a press to
+ * count: what is typed and not sent stays typed, and the queue below the field
+ * shows exactly what Apply will hand over.
  */
 function answerBlock(node) {
   const box = document.createElement("div");
@@ -1428,7 +1473,7 @@ function answerBlock(node) {
           if (pending.answers.get(node.id) === option) pending.answers.delete(node.id);
           else pending.answers.set(node.id, option);
           commitPending();
-          select(node.id);
+          refreshBlock(node);
         });
         options.append(button);
       }
@@ -1436,32 +1481,96 @@ function answerBlock(node) {
       box.append(options);
     }
 
+    const current = pending.answers.get(node.id);
+    if (current) {
+      const saved = document.createElement("div");
+      saved.className = "saved";
+      const text = document.createElement("span");
+      text.textContent = current;
+      const drop = document.createElement("button");
+      drop.type = "button";
+      drop.textContent = "✕";
+      drop.title = "Remove this answer";
+      drop.addEventListener("click", () => {
+        pending.answers.delete(node.id);
+        commitPending();
+        refreshBlock(node);
+      });
+      saved.append(text, drop);
+      box.append(saved);
+    }
+
     const field = document.createElement("textarea");
     field.placeholder = "Answer in your own words";
-    const current = pending.answers.get(node.id);
-    field.value = node.options && node.options.includes(current) ? "" : current || "";
-    field.addEventListener("change", () => {
+    const send = document.createElement("button");
+    send.type = "button";
+    send.className = "send";
+    send.textContent = "Save answer";
+    send.addEventListener("click", () => {
       const value = field.value.trim();
-      if (value) pending.answers.set(node.id, value);
-      else pending.answers.delete(node.id);
+      if (!value) return;
+      pending.answers.set(node.id, value);
+      field.value = "";
       commitPending();
-      renderNodeStates();
+      refreshBlock(node);
+      toast("Answer saved — press Apply to hand it over");
     });
-    box.append(field);
+    box.append(field, send);
+  }
+
+  const askLabel = document.createElement("span");
+  askLabel.className = "panel-kind";
+  askLabel.textContent = "Ask Claude";
+  box.append(askLabel);
+
+  const mine = pending.asks.filter(ask => ask.about === node.id);
+  if (mine.length) {
+    const queued = document.createElement("div");
+    queued.className = "queued";
+    for (const ask of mine) {
+      const row = document.createElement("div");
+      const text = document.createElement("span");
+      text.textContent = ask.text;
+      const drop = document.createElement("button");
+      drop.type = "button";
+      drop.textContent = "✕";
+      drop.title = "Remove this question";
+      drop.addEventListener("click", () => {
+        pending.asks.splice(pending.asks.indexOf(ask), 1);
+        commitPending();
+        refreshBlock(node);
+      });
+      row.append(text, drop);
+      queued.append(row);
+    }
+
+    box.append(queued);
   }
 
   const ask = document.createElement("textarea");
-  ask.placeholder = node.kind === "question" ? "Ask Claude about this question" : "Ask Claude about this node — \"why is this here?\"";
-  ask.addEventListener("change", () => {
+  ask.placeholder = node.kind === "question" ? "Ask about this question" : "Why is this here?";
+  const post = document.createElement("button");
+  post.type = "button";
+  post.className = "send";
+  post.textContent = "Add question";
+  post.addEventListener("click", () => {
     const text = ask.value.trim();
     if (!text) return;
     pending.asks.push({ about: node.id, title: node.title, text });
     ask.value = "";
     commitPending();
+    refreshBlock(node);
+    toast("Question queued — press Apply to send it");
   });
-  box.append(ask);
+  box.append(ask, post);
 
   return box;
+}
+
+/** Redraws whichever view is showing this node, so the queue stays current. */
+function refreshBlock(node) {
+  if (!document.getElementById("qa").hidden) renderQA();
+  else if (selected) select(selected);
 }
 
 /** Saves the draft and refreshes everything that shows how much is waiting. */
