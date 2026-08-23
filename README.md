@@ -9,19 +9,31 @@ and `dev/PLAN.md`; the map shows it as a graph and is rebuilt from those files
 whenever they change. The rules that govern when a map is worth building live in
 the `working-with-edmond` skill, rule 27.
 
-## Build a map
+## Open a map
 
 ```
-python3 tools/build-map.py dev/design/<name>.map.yaml --root .
+python3 server/serve.py --root . --open <name>
 ```
 
-The YAML is the source and belongs in git. The generated `.map.html` opens by
-double-click, with no server and no network. `--root` says where the paths cited
-by nodes start.
+The server renders the page on each request, so an edit to the YAML shows up on
+reload. It listens on 127.0.0.1 only, colours the cited code, and takes back
+what you do on the page: the selected node and, on Apply, the answers.
 
-The build refuses to render a map whose node lacks a required field, whose id
-repeats, whose edge names a node that is not there, or which cites a file that
-is missing — all four look on the page like a record that exists.
+The YAML is the source and belongs in git. Generated pages do not: nothing in
+`dev/design/` is committed but the `.map.yaml` files.
+
+For a page to publish or to read without the server:
+
+```
+python3 tools/build-map.py dev/design/<name>.map.yaml --root . -o /tmp/<name>.html
+```
+
+That snapshot shows cited code as plain text — a published artifact cannot load
+a highlighter, so it does without one.
+
+Rendering refuses a map whose node lacks a required field, whose id repeats,
+whose edge names a node that is not there, or which cites a file that is
+missing — all four look on the page like a record that exists.
 
 ## What the page does
 
@@ -33,7 +45,7 @@ is missing — all four look on the page like a record that exists.
 - **One question at a time.** Press `q` for the walkthrough: one card, one
   question, progress across the top.
 - **Read the code.** A node can cite files; the fragment is copied into the page
-  at build time and opens in a window with syntax colouring.
+  as it is rendered and opens in a window, coloured when the server rendered it.
 - **Apply.** Nothing leaves the page until Apply is pressed. Without the plugin
   running, Apply copies the answers as text for you to paste into the
   conversation; with it, they go straight to the session.
@@ -45,8 +57,9 @@ anywhere on their own.
 
 ```
 web/map-template.html    the page: renderer, panel, walkthrough, code window
-tools/build-map.py       YAML → page, with validation and fragment inlining
-skills/map/              the slash command that builds and opens a map
-server/                  MCP server: the reverse channel (planned, see dev/PLAN.md)
+tools/mapkit.py          read, validate, inline cited code, colour, render
+tools/build-map.py       one map to one HTML file, for publishing
+server/serve.py          localhost server: renders on request, takes answers back
+skills/map/              the slash command that opens a map
 dev/design/clauded.map.yaml   this project's own design map
 ```

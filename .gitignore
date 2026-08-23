@@ -1,2 +1,9 @@
 node_modules/
 *.log
+__pycache__/
+
+# Generated pages: the server renders them, the repository keeps the YAML
+dev/design/*.map.html
+
+# Runtime state written by the local server
+.clauded/

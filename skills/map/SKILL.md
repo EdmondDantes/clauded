@@ -26,17 +26,25 @@ from `dev/DECISIONS.md`, `dev/PLAN.md` (`## Fog` and `Decide` steps) and
 
 3. **Edges only where the source states them.** A connection you can see but
    nobody wrote down belongs in `## Fog`, not on the map.
-4. **Build:**
+4. **Open it:**
 
    ```
-   python3 ${CLAUDE_PLUGIN_ROOT}/tools/build-map.py dev/design/<name>.map.yaml --root .
+   python3 ${CLAUDE_PLUGIN_ROOT}/server/serve.py --root . --open <name>
    ```
 
-   The build fails on a missing field, a repeated id, a dangling edge or a cited
-   file that is not there. Fix the YAML, not the page.
+   The server renders the page on each request and colours the cited code, so an
+   edit to the YAML shows up on reload. Rendering fails on a missing field, a
+   repeated id, a dangling edge or a cited file that is not there — fix the
+   YAML, never the page.
 
-5. **Commit both files** and tell Edmond the path. Publishing the page as an
-   artifact is his call, not yours.
+   For a page to publish or to read without the server:
+
+   ```
+   python3 ${CLAUDE_PLUGIN_ROOT}/tools/build-map.py dev/design/<name>.map.yaml --root . -o /tmp/<name>.html
+   ```
+
+5. **Commit the YAML only.** Generated pages stay out of git. Publishing a
+   snapshot as an artifact is Edmond's call, not yours.
 
 ## Vocabularies
 

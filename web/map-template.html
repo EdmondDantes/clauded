@@ -576,11 +576,15 @@
 
   .code-body code { white-space: pre; }
 
-  .tok-comment { color: var(--ink-muted); font-style: italic; }
-  .tok-string { color: var(--decided); }
-  .tok-number { color: var(--aspect-3); }
-  .tok-keyword { color: var(--accent); font-weight: 500; }
-  .tok-call { color: var(--aspect-2); }
+  /* Highlighter classes, as emitted by the plugin server. */
+  .code-body .c, .code-body .c1, .code-body .cm, .code-body .cp, .code-body .cs { color: var(--ink-muted); font-style: italic; }
+  .code-body .s, .code-body .s1, .code-body .s2, .code-body .sb, .code-body .sd, .code-body .se, .code-body .sh, .code-body .si, .code-body .sx, .code-body .sr { color: var(--decided); }
+  .code-body .m, .code-body .mi, .code-body .mf, .code-body .mh, .code-body .mo { color: var(--aspect-3); }
+  .code-body .k, .code-body .kc, .code-body .kd, .code-body .kn, .code-body .kp, .code-body .kr, .code-body .kt, .code-body .ow { color: var(--accent); font-weight: 500; }
+  .code-body .nf, .code-body .nc, .code-body .nd { color: var(--aspect-2); }
+  .code-body .nv, .code-body .vi, .code-body .vg { color: var(--ink); }
+  .code-body .o, .code-body .p { color: var(--ink-muted); }
+  .code-body .err { color: var(--rejected); }
 
   .refs { display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
 
@@ -1180,6 +1184,7 @@ function select(id) {
   }
 
   renderPanel(byId.get(id), [...lit].filter(other => other !== id));
+  window.mapBridge?.select(id);
 }
 
 function clearSelection() {
@@ -1447,49 +1452,11 @@ function toast(text) {
   toastTimer = setTimeout(() => { box.hidden = true; }, 2600);
 }
 
-// Syntax colouring. One tokenizer for every language the map is likely to cite:
-// comments, strings, numbers, keywords and call names carry almost all of the
-// reading value, and the rest stays plain text.
-const KEYWORDS = new Set([
-  "abstract", "as", "async", "await", "break", "case", "catch", "class", "const", "continue",
-  "declare", "def", "default", "defer", "delete", "do", "elif", "else", "elseif", "enum",
-  "except", "export", "extends", "final", "finally", "fn", "for", "foreach", "from", "func",
-  "function", "go", "if", "impl", "implements", "import", "in", "instanceof", "interface",
-  "let", "match", "mod", "mut", "namespace", "new", "of", "package", "private", "protected",
-  "public", "pub", "raise", "readonly", "return", "self", "static", "struct", "super", "switch",
-  "this", "throw", "trait", "try", "type", "typedef", "union", "unsafe", "use", "var", "void",
-  "while", "with", "yield", "true", "false", "null", "nil", "None", "True", "False"
-]);
-
-const TOKEN = /(\/\*[\s\S]*?\*\/|\/\/[^\n]*|#[^\n]*|--[^\n]*)|('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`)|(\b\d[\d_.xXa-fA-F]*\b)|([A-Za-z_$][\w$]*)(\s*\()?/g;
-
-const escapeHtml = text => text.replace(/[&<>]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]));
-
-/** Returns the fragment as HTML with token spans; unknown text stays plain. */
-function highlight(code) {
-  let out = "";
-  let last = 0;
-
-  for (const match of code.matchAll(TOKEN)) {
-    const [text, comment, string, number, word, call] = match;
-    out += escapeHtml(code.slice(last, match.index));
-    last = match.index + text.length;
-
-    if (comment) out += `<span class="tok-comment">${escapeHtml(comment)}</span>`;
-    else if (string) out += `<span class="tok-string">${escapeHtml(string)}</span>`;
-    else if (number) out += `<span class="tok-number">${escapeHtml(number)}</span>`;
-    else if (KEYWORDS.has(word)) out += `<span class="tok-keyword">${escapeHtml(word)}</span>${call ? escapeHtml(call) : ""}`;
-    else if (call) out += `<span class="tok-call">${escapeHtml(word)}</span>${escapeHtml(call)}`;
-    else out += escapeHtml(word);
-  }
-
-  return out + escapeHtml(code.slice(last));
-}
-
 /**
- * Opens one source fragment. The code travels inside the map: the build script
- * copies it out of the file at build time, so the page shows what the map was
- * built from even when the file has moved on.
+ * Opens one source fragment. The code travels inside the map: it is copied out
+ * of the file when the map is rendered, so the page shows what the map was built
+ * from even when the file has moved on. Colouring comes with it as `ref.html`
+ * when the plugin server rendered the page; a static build shows plain text.
  */
 function openCode(ref) {
   const box = document.getElementById("codeWindow");
@@ -1534,6 +1501,7 @@ function openCode(ref) {
   body.className = "code-body";
   const first = parseInt(String(ref.lines || "1").split("-")[0], 10) || 1;
 
+  const coloured = Array.isArray(ref.html) ? ref.html : null;
   (ref.code || "").split("\n").forEach((line, index) => {
     const row = document.createElement("div");
     row.className = "row";
@@ -1541,7 +1509,8 @@ function openCode(ref) {
     number.className = "ln";
     number.textContent = first + index;
     const code = document.createElement("code");
-    code.innerHTML = highlight(line);
+    if (coloured && coloured[index] !== undefined) code.innerHTML = coloured[index];
+    else code.textContent = line;
     row.append(number, code);
     body.append(row);
   });
@@ -1741,6 +1710,22 @@ document.addEventListener("keydown", event => {
 document.getElementById("fit").addEventListener("click", fit);
 document.getElementById("clear").addEventListener("click", clearSelection);
 window.addEventListener("resize", fit);
+
+// The plugin server is the only thing that serves this page over http, so its
+// presence is the signal that a session is listening. Opened as a file, or as a
+// published artifact, the page keeps everything to itself.
+if (location.protocol === "http:" || location.protocol === "https:") {
+  const post = (path, payload) => fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  }).then(response => response.json());
+
+  window.mapBridge = {
+    apply: payload => post("/api/apply", payload),
+    select: id => post("/api/selection", { map: MAP.title, node: id }).catch(() => {})
+  };
+}
 
 loadPending();
 document.title = MAP.title || "Map";

@@ -36,6 +36,9 @@ nodes:
     stale diagram is worse than none.
   cost: Anything the map should show has to exist in a source document first — including edges.
   origin: session decision, 2026-08-23
+  refs:
+  - file: server/serve.py
+    lines: 77-105
 - id: d-split
   kind: decision
   status: decided
@@ -47,8 +50,8 @@ nodes:
   cost: The data file needs its own format and a check that it stays in step with the sources.
   origin: session decision, 2026-08-23
   refs:
-  - file: tools/build-map.py
-    lines: 84-111
+  - file: tools/mapkit.py
+    lines: 116-150
 - id: d-two-vocab
   kind: decision
   status: decided
@@ -60,8 +63,8 @@ nodes:
   cost: The shared layer has to stay free of either vocabulary.
   origin: session decision, 2026-08-23
   refs:
-  - file: web/map-template.html
-    lines: 1469-1490
+  - file: tools/mapkit.py
+    lines: 74-114
 - id: d-self-spec
   kind: decision
   status: decided
@@ -87,7 +90,7 @@ nodes:
   - both, panel by default
   refs:
   - file: web/map-template.html
-    lines: 1494-1520
+    lines: 1461-1487
 - id: q-format
   kind: decision
   status: decided
