@@ -19,7 +19,8 @@ TEMPLATE = WEB / "map-template.html"
 REQUIRED_NODE_FIELDS = ("id", "kind", "title", "body", "origin")
 DESIGN_KINDS = {"aspect", "question", "decision", "rejected"}
 ARCHITECTURE_KINDS = {"aspect", "module", "knowledge", "dependency"}
-RELATIONS = {"holds", "rejects"}
+# holds draws a solid line; rejects and needs draw dashed ones.
+RELATIONS = {"holds", "rejects", "needs"}
 MAX_FRAGMENT_LINES = 400
 
 SPAN = re.compile(r"<span[^>]*>|</span>")

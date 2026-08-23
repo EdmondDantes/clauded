@@ -208,7 +208,7 @@
     stroke-width: 1.5;
     opacity: .8;
   }
-  .edge.rejects { stroke-dasharray: 4 3; }
+  .edge.rejects, .edge.needs { stroke-dasharray: 4 3; }
   .edge.lit { stroke-width: 2.5; opacity: 1; }
 
   .node { cursor: pointer; }
@@ -239,6 +239,9 @@
   .node[data-kind="question"] .mark { fill: var(--open-soft); stroke: var(--open); }
   .node[data-kind="decision"] .mark { fill: var(--decided-soft); stroke: var(--decided); }
   .node[data-kind="rejected"] .mark { fill: var(--rejected-soft); stroke: var(--rejected); stroke-dasharray: 3 2; }
+  .node[data-kind="module"] .mark { fill: var(--accent-soft); stroke: var(--accent); }
+  .node[data-kind="knowledge"] .mark { fill: var(--decided-soft); stroke: var(--decided); }
+  .node[data-kind="dependency"] .mark { fill: var(--open-soft); stroke: var(--open); stroke-dasharray: 3 2; }
   .node[data-kind="rejected"] .title { fill: var(--ink-muted); }
 
   .node:hover .plate { stroke: var(--aspect-color, var(--accent)); }
@@ -930,7 +933,22 @@ const MAP = {
   edges: []
 };
 
-const KIND_LABEL = { aspect: "aspect", question: "open question", decision: "decision", rejected: "rejected" };
+// Both vocabularies a map may speak: design on the left, architecture on the
+// right. A kind decides the label, the shape of its marker and its column.
+const KIND_LABEL = {
+  aspect: "aspect",
+  question: "open question",
+  decision: "decision",
+  rejected: "rejected",
+  module: "module",
+  knowledge: "knows",
+  dependency: "depends on"
+};
+
+const KIND_COLUMN = {
+  aspect: 0, question: 1, decision: 1, rejected: 2,
+  module: 1, knowledge: 2, dependency: 2
+};
 const NODE_W = 232;
 const NODE_H = 52;
 const COL_GAP = 96;
@@ -978,7 +996,7 @@ function childrenOf(edges) {
  * onto the nodes and returns the drawing bounds, used to fit the view.
  */
 function layout(nodes, edges) {
-  const column = { aspect: 0, question: 1, decision: 1, rejected: 2 };
+  const column = KIND_COLUMN;
   const cursor = [0, 0, 0];
   const children = childrenOf(edges);
   const shown = new Set(nodes.map(n => n.id));
@@ -1060,8 +1078,14 @@ const el = (name, attrs = {}) => {
 
 /** Marks the node kind by shape: square aspect, diamond question, circle decision. */
 function mark(kind) {
-  if (kind === "aspect") return el("rect", { class: "mark", x: 12, y: NODE_H / 2 - 5, width: 10, height: 10, rx: 1.5 });
-  if (kind === "question") return el("rect", { class: "mark", x: 12, y: NODE_H / 2 - 5, width: 10, height: 10, transform: `rotate(45 17 ${NODE_H / 2})` });
+  const square = { class: "mark", x: 12, y: NODE_H / 2 - 5, width: 10, height: 10 };
+
+  if (kind === "aspect") return el("rect", { ...square, rx: 1.5 });
+  if (kind === "module") return el("rect", { ...square, x: 11, width: 12, height: 8, y: NODE_H / 2 - 4, rx: 1 });
+  if (kind === "question" || kind === "dependency") {
+    return el("rect", { ...square, transform: `rotate(45 17 ${NODE_H / 2})` });
+  }
+
   return el("circle", { class: "mark", cx: 17, cy: NODE_H / 2, r: 5.5 });
 }
 

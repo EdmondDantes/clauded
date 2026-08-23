@@ -51,6 +51,9 @@ collects questions onto a map and does nothing until Edmond presses Apply.
 
 ## S4 — The mode in the skill
 
-- [ ] S4.1 Architecture map vocabulary against a real project
-      done: a map of one existing project renders module, knowledge and dependency nodes
-      tier: T2
+- [x] S4.1 Architecture map vocabulary against a real project
+      done: dev/design/architecture.map.yaml renders 15 nodes and 13 edges, every kind placed
+      handoff: the page had no columns or markers for module, knowledge and dependency until now
+- [ ] S4.2 Install the plugin once and use it from a session
+      done: /map runs from the installed plugin and its MCP tools answer
+      tier: T1

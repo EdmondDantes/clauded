@@ -9,6 +9,16 @@ and `dev/PLAN.md`; the map shows it as a graph and is rebuilt from those files
 whenever they change. The rules that govern when a map is worth building live in
 the `working-with-edmond` skill, rule 27.
 
+## Install
+
+```
+/plugin marketplace add EdmondDantes/clauded
+/plugin install clauded@clauded
+```
+
+The plugin brings the `/map` command and an MCP server named `clauded`. Python 3
+with PyYAML is required; Pygments is optional and only colours cited code.
+
 ## Open a map
 
 ```
