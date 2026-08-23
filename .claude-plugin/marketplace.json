@@ -6,10 +6,7 @@
   "plugins": [
     {
       "name": "clauded",
-      "source": {
-        "source": "github",
-        "repo": "EdmondDantes/clauded"
-      },
+      "source": "./",
       "description": "Interactive design and architecture maps built from a project's own records",
       "category": "documentation"
     }
