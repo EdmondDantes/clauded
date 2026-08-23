@@ -199,7 +199,7 @@
   .swatch.rejected { border-radius: 50%; color: var(--rejected); background: var(--rejected-soft); border-style: dashed; }
 
   main {
-    --dock: 28rem;
+    --dock: clamp(20rem, 32%, 30rem);
     --record: 16rem;
     display: grid;
     min-height: 0;
@@ -225,7 +225,7 @@
   }
 
   /* Inside the dock the two panes either stack or stand side by side. */
-  main[data-layout="side"][data-flow="stack"] .dock { grid-template-rows: var(--record) auto minmax(0, 1fr); }
+  main[data-layout="side"][data-flow="stack"] .dock { grid-template-rows: minmax(0, auto) auto minmax(0, 1fr); }
   main[data-layout="side"][data-flow="row"] .dock { grid-template-columns: var(--record) auto minmax(0, 1fr); }
   main[data-layout="side"][data-flow="row"] .dock > .split { width: 5px; height: auto; cursor: col-resize; }
 
@@ -257,7 +257,18 @@
 
   .pane { min-width: 0; min-height: 0; overflow: hidden; display: grid; }
 
-  .record-pane { align-content: start; padding: .8rem 1rem; overflow-y: auto; }
+  main[data-flow="row"] .pane { min-width: 14rem; }
+
+  .record-pane {
+    align-content: start;
+    padding: .8rem 1.25rem;
+    overflow-y: auto;
+    /* The record takes what it needs, up to a share of the dock; the chat keeps
+       the rest instead of holding empty space while the record is clipped. */
+    max-height: 60vh;
+  }
+
+  main[data-layout="bottom"] .record-pane { max-height: none; }
 
   .chat-pane {
     grid-template-rows: auto minmax(0, 1fr) auto auto;
@@ -351,7 +362,7 @@
   .node[data-kind="dependency"] .mark { fill: var(--open-soft); stroke: var(--open); stroke-dasharray: 3 2; }
   .node[data-kind="rejected"] .title { fill: var(--ink-muted); }
 
-  .node:hover .plate { stroke: var(--aspect-color, var(--accent)); }
+  .node:hover .plate { stroke: var(--aspect-color, var(--accent)); stroke-width: 1.5; }
 
   .hide-btn { cursor: pointer; opacity: 0; }
   .hide-btn circle { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1; }
@@ -533,7 +544,8 @@
     font-size: var(--step-0);
     flex: 1;
     min-height: 2.6rem;
-    max-height: 8rem;
+    max-height: 9rem;
+    field-sizing: content;
     padding: .45rem .55rem;
     color: var(--ink);
     background: var(--surface-sunk);
@@ -574,17 +586,22 @@
     background: var(--open);
   }
 
-  .node.answered .plate { stroke: var(--decided); stroke-dasharray: 5 3; }
-  .node.settled .plate { stroke: var(--decided); stroke-dasharray: none; stroke-width: 2; }
+  /* State lives on a stripe down the left edge, so the plate's own outline is
+     free to mean selection and hover alone. */
+  .node .state { display: none; width: 3px; }
+  .node.answered .state, .node.settled .state, .node.unread .state, .node.fresh .state { display: block; }
+  .node.answered .state { fill: var(--open); }
+  .node.settled .state { fill: var(--decided); }
+  .node.unread .state { fill: var(--accent); }
+  .node.fresh .state { fill: var(--aspect-3); }
+
   .node.settled .mark { fill: var(--decided); stroke: var(--decided); }
 
   /* A thread Claude has written to, which is not the one on screen. */
   /* A node that has just been built, so its arrival is not silent. */
-  .node.fresh .plate { stroke: var(--accent); stroke-width: 2.5; }
-
   @media (prefers-reduced-motion: no-preference) {
     .node.fresh { animation: arrive .5s ease-out; }
-    .node.fresh .plate { animation: glow 1.8s ease-in-out 3; }
+    .node.fresh .state { animation: glow 1.8s ease-in-out 3; }
   }
 
   @keyframes arrive {
@@ -593,21 +610,17 @@
   }
 
   @keyframes glow {
-    0%, 100% { stroke-opacity: 1; }
-    50% { stroke-opacity: .3; }
+    0%, 100% { fill-opacity: 1; }
+    50% { fill-opacity: .25; }
   }
 
-  .node.unread .plate { stroke: var(--accent); stroke-width: 2.5; }
-  .node.unread .kind { fill: var(--accent); }
-  .node.unread .plate + .mark { filter: none; }
-
   @media (prefers-reduced-motion: no-preference) {
-    .node.unread .plate { animation: pulse 1.6s ease-in-out infinite; }
+    .node.unread .state { animation: pulse 1.6s ease-in-out infinite; }
   }
 
   @keyframes pulse {
-    0%, 100% { stroke-opacity: 1; }
-    50% { stroke-opacity: .35; }
+    0%, 100% { fill-opacity: 1; }
+    50% { fill-opacity: .35; }
   }
 
   .settled {
@@ -839,8 +852,8 @@
   .node:focus-visible .plate { stroke: var(--aspect-color, var(--accent)); stroke-width: 2.5; }
 
   .node.selected .plate { stroke: var(--aspect-color, var(--accent)); stroke-width: 2; }
-  svg.has-selection .node:not(.lit) { opacity: .3; }
-  svg.has-selection .edge:not(.lit) { opacity: .2; }
+  svg.has-selection .node:not(.lit) { opacity: .62; }
+  svg.has-selection .edge:not(.lit) { opacity: .35; }
 
   .stage { position: relative; min-height: 0; }
 
@@ -1012,7 +1025,29 @@
 
   .record .refs button, .record .origin { max-width: 100%; }
 
-  /* Phone: the chat sits under the graph, the record covers it when opened. */
+  /* Phone: one column, the graph on top and the dock below. These rules have to
+     beat main[data-layout="side"], hence the attribute selectors. */
+  @media (max-width: 52rem) {
+    main[data-layout], main[data-layout][data-side] {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(7rem, 1fr) auto minmax(0, 1.3fr);
+    }
+
+    main[data-layout] .stage { order: 1; }
+    main[data-layout] > .split { order: 2; height: 5px; width: auto; cursor: row-resize; }
+    main[data-layout] .dock { order: 3; border-left: none; border-top: 1px solid var(--line); }
+
+    main[data-layout] .dock,
+    main[data-layout][data-flow="row"] .dock,
+    main[data-layout][data-flow="stack"] .dock {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, auto) auto minmax(0, 1fr);
+    }
+
+    main[data-layout] .dock > .split { height: 5px; width: auto; cursor: row-resize; }
+    .record-pane { max-height: 40dvh; }
+  }
+
   @media (max-width: 52rem) {
     header { gap: .5rem 1rem; padding: .6rem .9rem; }
     h1 { font-size: var(--step-1); }
@@ -1505,6 +1540,7 @@ function render() {
     });
     group.style.setProperty("--aspect-color", colourOf(node.id));
     group.append(el("rect", { class: "plate", width: NODE_W, height: NODE_H }));
+    group.append(el("rect", { class: "state", x: 1, y: 6, height: NODE_H - 12, rx: 1.5 }));
     group.append(mark(node.kind));
 
     const kindLabel = el("text", { class: "kind", x: 32, y: 18 });
@@ -2157,8 +2193,10 @@ function updateApply() {
   if (!button) return;
   // This button ends the round: until it is pressed the work goes on.
   const count = pendingCount();
+  const label = count ? `Finish · ${count} to hand over` : "Finish";
   button.disabled = false;
-  button.textContent = count ? `Finish · ${count} to hand over` : "Finish";
+  // Rewriting the same text on every poll made the button flicker.
+  if (button.textContent !== label) button.textContent = label;
   button.title = "Hand the conversation over and end the round";
 }
 

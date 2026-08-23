@@ -75,6 +75,22 @@ view where the reader put it; validate rejects an unknown status, a question
 without one, and a node that is not a mapping; a closing script tag in the data
 is escaped.
 
+- [ ] S7.1 The rest of the design critique
+      done: kickers, type registers, the control strip, gutters, the tooltip anchors and the chip counter are settled
+      tier: T2
+      note: a designer reviewed the page on 2026-08-23. Fixed already — the record
+        no longer sits at a fixed height while the chat holds empty space; the dock
+        width is clamped so the graph survives 1100px and a phone shows the map at
+        all (the old phone rules lost on specificity and never applied); node state
+        moved to a stripe of its own, so hover, selection, unread and settled stop
+        speaking the same colour; selection dims the graph to .62 instead of .3;
+        the close button lost its browser defaults; the Finish label stopped
+        flickering. Left: two accent hues that duplicate aspect hues, kickers on
+        every plate, six type sizes and three faces, the control strip reading as
+        one undifferentiated row, 20px vs 16px gutters, the split looking like a
+        scrollbar, Fit/Clear and the toast overlapping on a narrow stage, and the
+        "3?/3" chip counter.
+
 - [ ] S6.1 State is one per project, not per map
       done: two maps in one project keep separate chats, resolved marks and storage keys
       tier: T2
