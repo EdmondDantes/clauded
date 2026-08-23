@@ -1,3 +1,4 @@
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Map</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -82,6 +83,8 @@
   body {
     margin: 0;
     height: 100vh;
+    /* Mobile browsers count the address bar into 100vh; dvh follows it. */
+    height: 100dvh;
     display: grid;
     grid-template-rows: auto auto 1fr;
     background: var(--ground);
@@ -185,10 +188,7 @@
     min-height: 0;
   }
 
-  @media (max-width: 52rem) {
-    main { grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr auto; }
-    aside { max-height: 45vh; }
-  }
+
 
   #canvas {
     width: 100%;
@@ -630,8 +630,87 @@
     min-height: 0;
   }
 
+
+
+  .panel-close {
+    display: none;
+    position: sticky;
+    top: 0;
+    margin: -1.25rem -1.25rem .5rem auto;
+    padding: .5rem .9rem;
+    font: inherit;
+    color: var(--ink-muted);
+    background: var(--surface);
+    border: none;
+    cursor: pointer;
+  }
+
+  /* Phone layout: the graph keeps the screen, and the record slides over it. */
   @media (max-width: 52rem) {
-    aside { border-left: none; border-top: 1px solid var(--line); }
+    header { gap: .6rem 1rem; padding: .6rem .9rem; }
+    h1 { font-size: var(--step-1); }
+    .legend { display: none; }
+    .source { display: none; }
+
+    .aspect-bar {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: .45rem .9rem;
+      gap: .4rem;
+    }
+
+    .aspect-bar::-webkit-scrollbar { display: none; }
+    .aspect-bar .bar-label { display: none; }
+    .aspect-bar .chip, .aspect-bar .mode-toggle, .aspect-bar .apply, .aspect-bar .reset { flex: none; }
+    .aspect-bar .mode-toggle { margin-left: 0 !important; }
+
+    main { grid-template-columns: minmax(0, 1fr); }
+
+    aside {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 5;
+      max-height: 66dvh;
+      border-left: none;
+      border-top: 1px solid var(--line-strong);
+      border-radius: 10px 10px 0 0;
+      box-shadow: var(--shadow);
+      transform: translateY(101%);
+      padding: 1.25rem 1rem 1.5rem;
+    }
+
+    body.panel-open aside { transform: none; }
+    body.panel-open .toolbar { display: none; }
+
+    .panel-close { display: block; }
+
+    .toolbar { bottom: .75rem; right: .75rem; }
+    .toolbar button { padding: .45rem .8rem; }
+
+    /* Touch has no hover, so the hide button on an aspect stays visible. */
+    .hide-btn { opacity: 1; }
+
+    .qa { padding: 0; }
+    .qa-card { border-radius: 0; height: 100dvh; padding: 1.25rem 1rem; align-content: start; }
+    .qa-card h2 { font-size: 1.25rem; }
+    .qa-actions { position: sticky; bottom: 0; padding: .6rem 0; background: var(--surface); }
+    .qa-actions .ghost { padding: .45rem .8rem; }
+
+    .code-window { padding: 0; }
+    .code-card { height: 100dvh; border-radius: 0; }
+    .code-body { font-size: .75rem; }
+    .code-head { flex-wrap: wrap; }
+    .code-head button { padding: .35rem .7rem; }
+
+    .answer textarea { min-height: 3.5rem; }
+    .answer .option { padding: .35rem .8rem; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    aside { transition: transform .18s ease-out; }
   }
 
   .panel-kind {
@@ -1184,11 +1263,13 @@ function select(id) {
   }
 
   renderPanel(byId.get(id), [...lit].filter(other => other !== id));
+  document.body.classList.add("panel-open");
   window.mapBridge?.select(id);
 }
 
 function clearSelection() {
   selected = null;
+  document.body.classList.remove("panel-open");
   svg.classList.remove("has-selection");
   for (const group of nodeShapes.values()) group.classList.remove("lit", "selected");
   for (const { path } of edgeShapes) path.classList.remove("lit");
@@ -1235,6 +1316,13 @@ function renderSpec() {
 
 function renderPanel(node, neighbours) {
   panel.innerHTML = "";
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "panel-close";
+  close.textContent = "Close ✕";
+  close.addEventListener("click", clearSelection);
+  panel.append(close);
 
   const kind = document.createElement("div");
   kind.className = "panel-kind";
@@ -1650,8 +1738,11 @@ function fit() {
   const rect = svg.getBoundingClientRect();
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
-  const padding = 48;
-  scale = Math.min((rect.width - padding * 2) / width, (rect.height - padding * 2) / height, 1.3);
+  const padding = rect.width < 640 ? 20 : 48;
+  const fitted = Math.min((rect.width - padding * 2) / width, (rect.height - padding * 2) / height, 1.3);
+  // On a phone the whole graph would shrink past reading size, so the fit stops
+  // at a legible scale and the rest of the map is reached by dragging.
+  scale = rect.width < 640 ? Math.max(fitted, 0.62) : fitted;
   offsetX = (rect.width - width * scale) / 2 - bounds.minX * scale;
   offsetY = (rect.height - height * scale) / 2 - bounds.minY * scale;
   applyTransform();
@@ -1671,8 +1762,26 @@ svg.addEventListener("wheel", event => {
 }, { passive: false });
 
 let dragging = null;
+const touches = new Map();
+let pinch = null;
+
+const spread = () => {
+  const [a, b] = [...touches.values()];
+  return { distance: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+};
 
 svg.addEventListener("pointerdown", event => {
+  touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+  if (touches.size === 2) {
+    // Two fingers: pinch. The pan started by the first finger is dropped, or
+    // the map would slide while the pinch scales it.
+    dragging = null;
+    const start = spread();
+    pinch = { distance: start.distance, scale, x: start.x, y: start.y, offsetX, offsetY };
+    return;
+  }
+
   if (event.target.closest(".node")) return;
   dragging = { x: event.clientX - offsetX, y: event.clientY - offsetY };
   svg.setPointerCapture(event.pointerId);
@@ -1680,13 +1789,34 @@ svg.addEventListener("pointerdown", event => {
 });
 
 svg.addEventListener("pointermove", event => {
+  if (touches.has(event.pointerId)) touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+  if (pinch && touches.size === 2) {
+    const now = spread();
+    const rect = svg.getBoundingClientRect();
+    const next = Math.min(2.5, Math.max(0.3, pinch.scale * (now.distance / pinch.distance)));
+    const px = pinch.x - rect.left;
+    const py = pinch.y - rect.top;
+    offsetX = px - (px - pinch.offsetX) * (next / pinch.scale);
+    offsetY = py - (py - pinch.offsetY) * (next / pinch.scale);
+    scale = next;
+    applyTransform();
+    return;
+  }
+
   if (!dragging) return;
   offsetX = event.clientX - dragging.x;
   offsetY = event.clientY - dragging.y;
   applyTransform();
 });
 
-const endDrag = () => { dragging = null; svg.classList.remove("dragging"); };
+const endDrag = event => {
+  if (event) touches.delete(event.pointerId);
+  if (touches.size < 2) pinch = null;
+  dragging = null;
+  svg.classList.remove("dragging");
+};
+
 svg.addEventListener("pointerup", endDrag);
 svg.addEventListener("pointercancel", endDrag);
 
