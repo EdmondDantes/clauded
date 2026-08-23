@@ -231,10 +231,31 @@ class Handler(BaseHTTPRequestHandler):
         self.json_reply(200, {"ok": True})
 
 
+PORT_TRIES = 12
+
+
 def start(root=".", port=8791):
-    """Starts the server on a background thread and returns (server, state, url)."""
+    """
+    Starts the server on a background thread and returns (server, state, url).
+
+    A second Claude Code session, or a hand-started server, already holds the
+    default port; rather than failing, the next free port up is taken.
+    """
     state = State(root)
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = None
+    last = None
+
+    for candidate in range(port, port + PORT_TRIES):
+        try:
+            server = ThreadingHTTPServer(("127.0.0.1", candidate), Handler)
+            port = candidate
+            break
+        except OSError as error:
+            last = error
+
+    if server is None:
+        raise OSError(f"no free port between {port} and {port + PORT_TRIES - 1}: {last}")
+
     server.root = Path(root)
     server.state = state
     server.daemon_threads = True

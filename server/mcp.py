@@ -31,11 +31,12 @@ DEFAULT_PORT = 8791
 TOOLS = [
     {
         "name": "open_map",
-        "description": "Render a map of this project and return its address. Opens it in a browser unless told otherwise.",
+        "description": "Render a map and return its address. Opens it in a browser unless told otherwise.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Map name, the part before .map.yaml"},
+                "name": {"type": "string", "description": "Map name (the part before .map.yaml), or a path to the file"},
+                "project": {"type": "string", "description": "Project root holding dev/design; defaults to where Claude Code started, and stays in force for later calls"},
                 "browser": {"type": "boolean", "description": "Open a browser window; default true"},
             },
             "required": ["name"],
@@ -85,7 +86,13 @@ TOOLS = [
 
 
 class Session:
-    """Holds the one running map server, started when a tool first needs it."""
+    """
+    Holds the one running map server, started when a tool first needs it.
+
+    The project root starts as the directory Claude Code was launched in, which
+    is often not the project that owns the maps: a tool may name another, and
+    the running server follows it without a restart.
+    """
 
     def __init__(self, root, port):
         self.root = Path(root)
@@ -101,15 +108,35 @@ class Session:
                 self.server, self.state, self.url = maps.start(self.root, self.port)
             return self.state, self.url
 
+    def use(self, root):
+        """Points the session at another project; returns the root in force."""
+        with self.lock:
+            if root:
+                self.root = Path(root).expanduser().resolve()
+                if self.server is not None:
+                    self.server.root = self.root
+            return self.root
+
 
 def tool_open_map(session, args):
-    state, url = session.ensure()
     name = args["name"]
+
+    # A path to the map file names its project too: dev/design/<name>.map.yaml
+    # sits three levels under the root.
+    path = Path(name).expanduser()
+    if path.suffix in (".yaml", ".yml") and path.is_file():
+        session.use(path.resolve().parent.parent.parent)
+        name = path.name[:-len(".map.yaml")]
+    else:
+        session.use(args.get("project"))
+
+    state, url = session.ensure()
     known = maps.maps_in(session.root)
 
     if name not in known:
         listing = ", ".join(known) or "none"
-        return f"No map named {name}. Maps in this project: {listing}."
+        return (f"No map named {name}. Maps under {session.root}: {listing}. "
+                "Name the project root with `project`, or pass the path to the .map.yaml file.")
 
     address = f"{url}/map/{name}"
     if args.get("browser", True):
