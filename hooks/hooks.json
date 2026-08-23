@@ -6,8 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/map-inbox.py"],
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/map-inbox.py\"",
             "timeout": 10
           }
         ]
