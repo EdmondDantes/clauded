@@ -107,6 +107,61 @@ is escaped.
       done: the page does not reload while a field holds text
       tier: T1
 
+## S8 — The window Edmond works in  [done]
+
+Goal: the arrangement of the window is changed from the window itself, and it
+holds still while it is being changed.
+Done when: the dock reaches the top of the window, a splitter grows the pane the
+drag points at, and the arrangement is picked from a card on the dock.
+
+- [x] S8.1 The Finish label survives a redraw of the aspect strip
+      done: pressing a layout control leaves the label and its counter in place
+      tier: T1 · role: —
+      handoff: the button is built empty and takes its text from updateApply, so
+        renderAspectBar calls it at the end. Checked in the browser: the label
+        held across an arrangement change and across hiding an aspect.
+- [x] S8.2 A splitter grows the pane the drag points at
+      done: every arrangement, phone width included, follows the pointer
+      tier: T1 · role: —
+      handoff: draggable reads the axis from the handle's own box and the
+        direction from where the panel lies against it, so the arrangement is
+        never consulted. Measured in the browser: the dock and the record grew
+        by the drag distance in eight arrangements, and by 50px and 40px at
+        390px wide, where the phone rules had sent the old drag sideways.
+- [x] S8.3 The dock stands the full height of the window
+      done: the title and the aspect strip end at the dock's edge
+      tier: T2 · role: —
+      handoff: the header and the aspect strip moved inside .stage, and body is
+        one row holding main. The two panes sit in .dock-body, which is what the
+        flow rules size now; .dock keeps a head above it.
+- [x] S8.4 The arrangement is picked from a card on the dock
+      done: one button on the dock head offers six arrangements; the aspect strip
+        carries no layout buttons
+      tier: T2 · role: —
+      handoff: the card is a 3x2 table — a column is which edge the dock stands
+        against, a row is how the panes divide it — drawn as SVG pictograms in
+        currentColor, so the chosen one takes the accent. Swap sits under them.
+- [x] S8.5 Each pane folds from its own head
+      done: folding the record leaves the conversation the whole dock
+      tier: T1 · role: —
+      handoff: data-fold on main gives the folded pane's track to the other and
+        hides the handle. Measured: folding the record took the chat from 774 to
+        824px, folding the chat gave the record the dock.
+- [x] S8.6 One question at a time is a message, not a window
+      done: the button hands the agent the mode and opens no dialog
+      tier: T2 · role: —
+      handoff: the walkthrough dialog is gone — markup, styles and some 250
+        lines of it. The button writes ONE_AT_A_TIME into the conversation and
+        points at the first open question; checked that it reached /api/inbox.
+        The skill says what to do on receiving it.
+- [x] S8.7 The code window shows the file around the fragment
+      done: the window opens on the cited lines and scrolls through the file
+      tier: T2 · role: —
+      handoff: GET /api/source?file= serves one file of the project, capped at
+        4000 lines and coloured by the same mapkit.colour; a path outside the
+        root is refused. Checked: mcp.py opened 609 rows with the cited 15
+        tinted and scrolled to. Without the server the stored fragment stays.
+
 ## S4 — The mode in the skill
 
 - [x] S4.1 Architecture map vocabulary against a real project

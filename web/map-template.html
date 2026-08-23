@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Map</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -102,7 +103,7 @@
     /* Mobile browsers count the address bar into 100vh; dvh follows it. */
     height: 100dvh;
     display: grid;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: minmax(0, 1fr);
     background: var(--ground);
     color: var(--ink);
     font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
@@ -200,12 +201,18 @@
 
   main {
     --dock: clamp(20rem, 32%, 30rem);
-    --record: 16rem;
     display: grid;
     min-height: 0;
   }
 
-  /* Side: the dock stands against one edge of the graph. */
+  /* How tall the record stands when nobody has dragged it: as tall as it needs
+     in a stack, a fixed column when the panes stand side by side. A drag writes
+     a length onto `main` itself, and that inline value beats both. */
+  main[data-flow="stack"] { --record: auto; }
+  main[data-flow="row"] { --record: 16rem; }
+
+  /* Side: the dock stands against one edge of the graph, the full height of the
+     window. The title and the aspect strip belong to the graph, not to both. */
   main[data-layout="side"] {
     grid-template-columns: minmax(0, 1fr) auto var(--dock);
     grid-template-rows: minmax(0, 1fr);
@@ -219,80 +226,103 @@
   main[data-layout="side"][data-side="left"] > .split { order: 2; }
   main[data-layout="side"][data-side="left"] .stage { order: 3; }
 
-  main[data-layout="side"] .dock {
-    display: grid;
-    border-left: 1px solid var(--line);
-  }
+  main[data-layout="side"] .dock { border-left: 1px solid var(--line); }
 
-  /* Inside the dock the two panes either stack or stand side by side. */
-  main[data-layout="side"][data-flow="stack"] .dock { grid-template-rows: minmax(0, auto) auto minmax(0, 1fr); }
-  main[data-layout="side"][data-flow="row"] .dock { grid-template-columns: var(--record) auto minmax(0, 1fr); }
-  main[data-layout="side"][data-flow="row"] .dock > .split { width: 5px; height: auto; cursor: col-resize; }
-
-  /* Bottom: the dock lies under the graph, its two panes side by side. */
+  /* Bottom: the dock lies under the graph. */
   main[data-layout="bottom"] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto var(--dock);
   }
 
-  main[data-layout="bottom"] .dock {
+  main[data-layout="bottom"] .dock { border-top: 1px solid var(--line); }
+
+  .stage {
     display: grid;
-    border-top: 1px solid var(--line);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    min-width: 0;
+    min-height: 0;
+    background: var(--surface);
   }
 
-  main[data-layout="bottom"][data-flow="row"] .dock { grid-template-columns: var(--record) auto minmax(0, 1fr); }
-  main[data-layout="bottom"][data-flow="stack"] .dock { grid-template-rows: var(--record) auto minmax(0, 1fr); }
-  main[data-layout="bottom"][data-flow="stack"] .dock > .split { height: 5px; width: auto; cursor: row-resize; }
+  .graph { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+
+  .dock {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-width: 0;
+    min-height: 0;
+    background: var(--surface);
+  }
+
+  /* Inside the dock the two panes either stack or stand side by side. */
+  .dock-body { display: grid; min-width: 0; min-height: 0; }
+
+  main[data-flow="stack"] .dock-body { grid-template-rows: var(--record) auto minmax(0, 1fr); }
+  main[data-flow="row"] .dock-body { grid-template-columns: var(--record) auto minmax(0, 1fr); }
+  main[data-flow="stack"][data-order="chat-first"] .dock-body { grid-template-rows: minmax(0, 1fr) auto var(--record); }
+  main[data-flow="row"][data-order="chat-first"] .dock-body { grid-template-columns: minmax(0, 1fr) auto var(--record); }
 
   main[data-order="chat-first"] .record-pane { order: 3; }
   main[data-order="chat-first"] .chat-pane { order: 1; }
-  main[data-order="chat-first"] .dock > .split { order: 2; }
+  main[data-order="chat-first"] .dock-body > .split { order: 2; }
 
-  main[data-layout="side"][data-flow="stack"][data-order="chat-first"] .dock { grid-template-rows: minmax(0, 1fr) auto var(--record); }
-  main[data-layout="side"][data-flow="row"][data-order="chat-first"] .dock { grid-template-columns: minmax(0, 1fr) auto var(--record); }
-  main[data-layout="bottom"][data-flow="row"][data-order="chat-first"] .dock { grid-template-columns: minmax(0, 1fr) auto var(--record); }
-  main[data-layout="bottom"][data-flow="stack"][data-order="chat-first"] .dock { grid-template-rows: minmax(0, 1fr) auto var(--record); }
+  /* A folded pane keeps its head and gives up the rest of the track. */
+  main[data-fold="record"][data-flow="stack"] .dock-body { grid-template-rows: auto 0 minmax(0, 1fr); }
+  main[data-fold="record"][data-flow="row"] .dock-body { grid-template-columns: auto 0 minmax(0, 1fr); }
+  main[data-fold="chat"][data-flow="stack"] .dock-body { grid-template-rows: minmax(0, 1fr) 0 auto; }
+  main[data-fold="chat"][data-flow="row"] .dock-body { grid-template-columns: minmax(0, 1fr) 0 auto; }
+  main[data-fold] .dock-body > .split { visibility: hidden; }
+  main[data-fold="record"] .record-pane > :not(.pane-head) { display: none; }
+  main[data-fold="chat"] .chat-pane > :not(.pane-head) { display: none; }
 
-  .dock { min-width: 0; min-height: 0; background: var(--surface); }
-
-  .pane { min-width: 0; min-height: 0; overflow: hidden; display: grid; }
+  .pane {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
 
   main[data-flow="row"] .pane { min-width: 14rem; }
 
-  .record-pane {
-    align-content: start;
-    padding: .8rem 1.25rem;
-    overflow-y: auto;
-    /* The record takes what it needs, up to a share of the dock; the chat keeps
-       the rest instead of holding empty space while the record is clipped. */
-    max-height: 60vh;
-  }
+  /* A record nobody has dragged takes what it needs, up to a share of the dock,
+     so the conversation keeps the rest instead of holding empty space. The drag
+     lifts the cap: a pane that refuses to follow the handle reads as broken. */
+  main[data-flow="stack"] .record-pane { max-height: var(--record-cap, 60vh); }
 
-  main[data-layout="bottom"] .record-pane { max-height: none; }
+  /* With the conversation folded away there is nothing to leave room for. */
+  main[data-fold="chat"] .record-pane { max-height: none; }
+
+  .pane-body { overflow-y: auto; min-height: 0; align-content: start; padding: .8rem 1.25rem; }
 
   .chat-pane {
     grid-template-rows: auto minmax(0, 1fr) auto auto;
     gap: .55rem;
-    padding: .8rem 1rem 1rem;
+    padding-bottom: .8rem;
     min-height: 0;
   }
 
-  /* The handle between panels: drag to resize, arrows to nudge. */
-  .split { background: var(--line); touch-action: none; }
+  .chat-pane .chat-log, .chat-pane .chat-options, .chat-pane .compose { margin: 0 1rem; }
+  .chat-pane .chat-log { margin-top: .25rem; }
 
-  main[data-layout="side"] > .split { width: 5px; cursor: col-resize; }
-  main[data-layout="side"] .dock > .split { height: 5px; cursor: row-resize; }
-  main[data-layout="bottom"] > .split { height: 5px; cursor: row-resize; }
-  main[data-layout="bottom"] .dock > .split { width: 5px; cursor: col-resize; }
+  /* The top of the dock: who is on the other end, and where the panels sit. */
+  .dock-head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .45rem .6rem .45rem 1rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-sunk);
+  }
 
-  .split:hover, .split:focus-visible { background: var(--accent); outline: none; }
+  .dock-tools { margin-left: auto; display: flex; align-items: center; gap: .3rem; }
 
-  .layout-controls { display: flex; gap: .3rem; }
-
-  .layout-controls button {
-    font: inherit;
-    font-size: var(--step-0);
-    padding: .15rem .5rem;
+  .layout-button {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .2rem .35rem;
     color: var(--ink-muted);
     background: var(--surface);
     border: 1px solid var(--line-strong);
@@ -300,11 +330,114 @@
     cursor: pointer;
   }
 
-  .layout-controls button:hover, .layout-controls button:focus-visible {
-    color: var(--accent);
-    border-color: var(--accent);
-    outline: none;
+  .layout-button:hover, .layout-button[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+  .layout-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .layout-card {
+    position: absolute;
+    top: calc(100% + .35rem);
+    right: .5rem;
+    z-index: 15;
+    width: 15.5rem;
+    padding: .75rem;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
   }
+
+  .layout-card[hidden] { display: none; }
+
+  .layout-card .card-label {
+    display: block;
+    margin-bottom: .55rem;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .625rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  .layout-card .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
+
+  .layout-card .grid button {
+    display: grid;
+    justify-items: center;
+    padding: .45rem .3rem .35rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .layout-card .grid button:hover { border-color: var(--line-strong); }
+  .layout-card .grid button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .layout-card .grid button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+  .layout-card .swap {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    width: 100%;
+    margin-top: .65rem;
+    padding-top: .6rem;
+    border-top: 1px solid var(--line);
+    font: inherit;
+    font-size: var(--step-0);
+    color: var(--ink-muted);
+    background: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    cursor: pointer;
+  }
+
+  .layout-card .swap:hover, .layout-card .swap:focus-visible { color: var(--accent); outline: none; }
+  .layout-card .swap svg { margin-left: auto; }
+
+  /* Each pane says what it is and folds from its own head. */
+  .pane-head {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .4rem .6rem .4rem 1rem;
+    border-bottom: 1px solid var(--line);
+    min-width: 0;
+  }
+
+  .pane-name {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .6875rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    flex: none;
+  }
+
+  .fold {
+    margin-left: auto;
+    display: inline-flex;
+    padding: .2rem;
+    color: var(--ink-muted);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    flex: none;
+  }
+
+  .fold:hover { color: var(--accent); border-color: var(--line-strong); }
+  .fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* The handle between panels: drag to resize. */
+  .split { background: var(--line); touch-action: none; }
+
+  main[data-layout="side"] > .split { width: 5px; cursor: col-resize; }
+  main[data-layout="bottom"] > .split { height: 5px; cursor: row-resize; }
+  main[data-flow="stack"] .dock-body > .split { height: 5px; width: auto; cursor: row-resize; }
+  main[data-flow="row"] .dock-body > .split { width: 5px; height: auto; cursor: col-resize; }
+
+  .split:hover, .split:focus-visible { background: var(--accent); outline: none; }
 
 
 
@@ -479,31 +612,6 @@
   .apply:not([disabled]):hover { filter: brightness(1.08); }
   .apply:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .answer {
-    margin-top: 1.1rem;
-    padding-top: .9rem;
-    border-top: 1px solid var(--line);
-    display: grid;
-    gap: .55rem;
-  }
-
-  .answer .options { display: flex; flex-wrap: wrap; gap: .35rem; }
-
-  .answer .option {
-    font: inherit;
-    font-size: var(--step-0);
-    padding: .25rem .7rem;
-    color: var(--ink);
-    background: var(--surface-sunk);
-    border: 1px solid var(--line-strong);
-    border-radius: 999px;
-    cursor: pointer;
-    text-align: left;
-  }
-
-  .answer .option:hover { border-color: var(--accent); color: var(--accent); }
-  .answer .option:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-
   .thread { display: grid; gap: .4rem; max-height: 18rem; overflow-y: auto; }
 
   .thread .msg {
@@ -649,86 +757,6 @@
 
   .toast[hidden] { display: none; }
 
-  .qa {
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-    display: grid;
-    place-items: center;
-    padding: 1.5rem;
-    background: color-mix(in srgb, var(--ground) 82%, transparent);
-    backdrop-filter: blur(3px);
-  }
-
-  .qa[hidden] { display: none; }
-
-  .qa-card {
-    width: min(38rem, 100%);
-    max-height: 100%;
-    overflow-y: auto;
-    padding: 1.75rem;
-    background: var(--surface);
-    border: 1px solid var(--line-strong);
-    border-top: 3px solid var(--aspect-color, var(--accent));
-    border-radius: 6px;
-    box-shadow: var(--shadow);
-    display: grid;
-    gap: .9rem;
-  }
-
-  .qa-head {
-    display: flex;
-    align-items: baseline;
-    gap: .75rem;
-    font-family: "IBM Plex Mono", monospace;
-    font-size: .6875rem;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    color: var(--ink-muted);
-  }
-
-  .qa-dots { margin-left: auto; display: flex; gap: .25rem; }
-
-  .qa-dots i {
-    width: .45rem;
-    height: .45rem;
-    border-radius: 50%;
-    background: var(--line-strong);
-  }
-
-  .qa-dots i.done { background: var(--decided); }
-  .qa-dots i.here { background: var(--aspect-color, var(--accent)); transform: scale(1.35); }
-
-  .qa-card h2 {
-    margin: 0;
-    font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
-    font-size: 1.5rem;
-    font-weight: 600;
-    line-height: 1.2;
-    text-wrap: balance;
-  }
-
-  .qa-card .body { margin: 0; max-width: 62ch; }
-  .qa-card .why { margin: 0; max-width: 62ch; color: var(--ink-muted); }
-
-  .qa-actions { display: flex; align-items: center; gap: .5rem; margin-top: .35rem; }
-
-  .qa-actions .ghost {
-    font: inherit;
-    font-size: var(--step-0);
-    padding: .25rem .7rem;
-    color: var(--ink-muted);
-    background: none;
-    border: 1px solid var(--line-strong);
-    border-radius: 4px;
-    cursor: pointer;
-  }
-
-  .qa-actions .ghost:hover, .qa-actions .ghost:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
-  .qa-actions .grow { margin-left: auto; }
-
-  .qa-empty { text-align: center; color: var(--ink-muted); display: grid; gap: 1rem; }
-
   .code-window {
     position: fixed;
     inset: 0;
@@ -793,6 +821,10 @@
   .code-body .row { display: flex; gap: .9rem; padding: 0 .9rem; }
   .code-body .row:hover { background: var(--surface-sunk); }
 
+  /* The lines the map cites, kept findable once the whole file is on screen. */
+  .code-body .row.cited { background: var(--accent-soft); }
+  .code-body .row.cited .ln { color: var(--accent); }
+
   .code-body .ln {
     width: 3ch;
     flex: none;
@@ -807,10 +839,12 @@
 
   /* Highlighter classes, as emitted by the plugin server. */
   .code-body .c, .code-body .c1, .code-body .cm, .code-body .cp, .code-body .cs { color: var(--ink-muted); font-style: italic; }
-  .code-body .s, .code-body .s1, .code-body .s2, .code-body .sb, .code-body .sd, .code-body .se, .code-body .sh, .code-body .si, .code-body .sx, .code-body .sr { color: var(--decided); }
+  .code-body .s, .code-body .s1, .code-body .s2, .code-body .sa, .code-body .sb, .code-body .sd,
+  .code-body .se, .code-body .sh, .code-body .si, .code-body .sx, .code-body .sr { color: var(--decided); }
   .code-body .m, .code-body .mi, .code-body .mf, .code-body .mh, .code-body .mo { color: var(--aspect-3); }
   .code-body .k, .code-body .kc, .code-body .kd, .code-body .kn, .code-body .kp, .code-body .kr, .code-body .kt, .code-body .ow { color: var(--accent); font-weight: 500; }
-  .code-body .nf, .code-body .nc, .code-body .nd { color: var(--aspect-2); }
+  .code-body .nf, .code-body .nc, .code-body .nd, .code-body .nn { color: var(--aspect-2); }
+  .code-body .nb, .code-body .bp, .code-body .ne { color: var(--open); }
   .code-body .nv, .code-body .vi, .code-body .vg { color: var(--ink); }
   .code-body .o, .code-body .p { color: var(--ink-muted); }
   .code-body .err { color: var(--rejected); }
@@ -854,12 +888,6 @@
   .node.selected .plate { stroke: var(--aspect-color, var(--accent)); stroke-width: 2; }
   svg.has-selection .node:not(.lit) { opacity: .62; }
   svg.has-selection .edge:not(.lit) { opacity: .35; }
-
-  .stage { position: relative; min-height: 0; }
-
-
-
-  .chat-head { display: flex; align-items: baseline; gap: .6rem; min-width: 0; }
 
   .presence {
     display: inline-flex;
@@ -1015,7 +1043,7 @@
      folds to a readable height; the rest is one click away. */
   .record { border-top: 3px solid var(--aspect-color, var(--accent)); padding-top: .6rem; }
   .record[hidden] { display: none; }
-  .record-pane:has(.record[hidden])::before {
+  .pane-body:has(.record[hidden])::before {
     content: "Pick a node to read its record here.";
     color: var(--ink-muted);
     font-size: var(--step-0);
@@ -1029,22 +1057,40 @@
      beat main[data-layout="side"], hence the attribute selectors. */
   @media (max-width: 52rem) {
     main[data-layout], main[data-layout][data-side] {
+      /* The dock lies below whatever the arrangement says, and the handle has
+         to move it here too — so the same length sizes it, in a phone's share
+         of the screen rather than a desktop column's width. */
+      --dock: 55dvh;
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: minmax(7rem, 1fr) auto minmax(0, 1.3fr);
+      grid-template-rows: minmax(7rem, 1fr) auto var(--dock);
     }
 
     main[data-layout] .stage { order: 1; }
     main[data-layout] > .split { order: 2; height: 5px; width: auto; cursor: row-resize; }
     main[data-layout] .dock { order: 3; border-left: none; border-top: 1px solid var(--line); }
 
-    main[data-layout] .dock,
-    main[data-layout][data-flow="row"] .dock,
-    main[data-layout][data-flow="stack"] .dock {
+    main[data-layout] .dock-body,
+    main[data-layout][data-flow="row"] .dock-body,
+    main[data-layout][data-flow="stack"] .dock-body {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: minmax(0, auto) auto minmax(0, 1fr);
+      grid-template-rows: var(--record) auto minmax(0, 1fr);
     }
 
-    main[data-layout] .dock > .split { height: 5px; width: auto; cursor: row-resize; }
+    main[data-layout][data-order="chat-first"] .dock-body {
+      grid-template-rows: minmax(0, 1fr) auto var(--record);
+    }
+
+    main[data-fold="record"][data-layout] .dock-body {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto 0 minmax(0, 1fr);
+    }
+
+    main[data-fold="chat"][data-layout] .dock-body {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) 0 auto;
+    }
+
+    main[data-layout] .dock-body > .split { height: 5px; width: auto; cursor: row-resize; }
     .record-pane { max-height: 40dvh; }
   }
 
@@ -1081,11 +1127,6 @@
 
     /* Touch has no hover, so the hide button on an aspect stays visible. */
     .hide-btn { opacity: 1; }
-
-    .qa { padding: 0; }
-    .qa-card { border-radius: 0; height: 100dvh; padding: 1.25rem 1rem; align-content: start; }
-    .qa-card h2 { font-size: 1.25rem; }
-    .qa-actions { position: sticky; bottom: 0; padding: .6rem 0; background: var(--surface); }
 
     .code-window { padding: 0; }
     .code-card { height: 100dvh; border-radius: 0; }
@@ -1195,49 +1236,67 @@
   .toolbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
 
-<header>
-  <h1 id="mapTitle"></h1>
-  <span class="source" id="mapSource"></span>
-  <div class="tally" id="tally"></div>
-</header>
-
-<nav class="aspect-bar" id="aspectBar" aria-label="Aspects on the map"></nav>
-
-<div class="qa" id="qa" hidden role="dialog" aria-modal="true" aria-label="One question at a time"></div>
-
 <div class="code-window" id="codeWindow" hidden role="dialog" aria-modal="true" aria-label="Source fragment"></div>
 
 <main id="main" data-layout="side" data-side="right" data-flow="stack" data-order="record-first">
   <div class="stage">
-    <svg id="canvas" role="application" aria-label="Design decision map"></svg>
-    <div class="toast" id="toast" role="status" hidden></div>
-    <div class="toolbar">
-      <button type="button" id="fit">Fit</button>
-      <button type="button" id="clear">Clear</button>
+    <header>
+      <h1 id="mapTitle"></h1>
+      <span class="source" id="mapSource"></span>
+      <div class="tally" id="tally"></div>
+    </header>
+
+    <nav class="aspect-bar" id="aspectBar" aria-label="Aspects on the map"></nav>
+
+    <div class="graph">
+      <svg id="canvas" role="application" aria-label="Design decision map"></svg>
+      <div class="toast" id="toast" role="status" hidden></div>
+      <div class="toolbar">
+        <button type="button" id="fit">Fit</button>
+        <button type="button" id="clear">Clear</button>
+      </div>
     </div>
   </div>
 
   <div class="split" id="splitMain" role="separator" aria-label="Resize the panels" tabindex="0"></div>
 
   <div class="dock" id="dock">
-    <section class="pane record-pane" aria-label="Node record">
-      <div class="record" id="panel" aria-live="polite" hidden></div>
-    </section>
+    <div class="dock-head">
+      <span class="presence" id="presence" title=""><i></i><b></b></span>
+      <span class="dock-tools">
+        <button type="button" id="layoutButton" class="layout-button" aria-haspopup="true" aria-expanded="false"
+                title="Where the panels sit"></button>
+      </span>
+      <div class="layout-card" id="layoutCard" hidden></div>
+    </div>
 
-    <div class="split" id="splitDock" role="separator" aria-label="Resize the record" tabindex="0"></div>
-
-    <section class="pane chat-pane" aria-label="Conversation with Claude">
-      <div class="chat-head">
-        <span class="presence" id="presence" title=""><i></i><b></b></span>
-        <span class="chat-subject" id="chatAbout"></span>
-      </div>
-      <div class="chat-log" id="chatLog"></div>
-      <div class="chat-options" id="chatOptions"></div>
-      <div class="compose">
-        <textarea id="chatField" rows="2" placeholder="Enter sends · Shift+Enter for a new line"></textarea>
-        <button type="button" id="chatSend">Send</button>
-      </div>
+    <div class="dock-body" id="dockBody">
+      <section class="pane record-pane" id="recordPane" aria-label="Node record">
+        <div class="pane-head">
+          <span class="pane-name">Record</span>
+          <button type="button" class="fold" data-fold="record" title="Fold the record"></button>
+        </div>
+        <div class="pane-body">
+          <div class="record" id="panel" aria-live="polite" hidden></div>
+        </div>
       </section>
+
+      <div class="split" id="splitDock" role="separator" aria-label="Resize the record" tabindex="0"></div>
+
+      <section class="pane chat-pane" id="chatPane" aria-label="Conversation with Claude">
+        <div class="pane-head">
+          <span class="pane-name">Conversation</span>
+          <span class="chat-subject" id="chatAbout"></span>
+          <button type="button" class="fold" data-fold="chat" title="Fold the conversation"></button>
+        </div>
+        <div class="chat-log" id="chatLog"></div>
+        <div class="chat-options" id="chatOptions"></div>
+        <div class="compose">
+          <textarea id="chatField" rows="2" placeholder="Enter sends · Shift+Enter for a new line"></textarea>
+          <button type="button" id="chatSend">Send</button>
+        </div>
+      </section>
+    </div>
   </div>
 </main>
 
@@ -1648,42 +1707,13 @@ function renderAspectBar() {
     bar.append(chip);
   }
 
-  const controls = document.createElement("span");
-  controls.className = "layout-controls";
-  controls.style.marginLeft = "auto";
-
-  const toggle = (title, label, change) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.title = title;
-    button.textContent = label;
-    button.addEventListener("click", () => {
-      change();
-      saveLayout();
-      renderAspectBar();
-      fit();
-    });
-    return button;
-  };
-
-  controls.append(
-    toggle("Panels beside the graph, or under it", main.dataset.layout === "side" ? "▤ side" : "▥ bottom",
-      () => { main.dataset.layout = main.dataset.layout === "side" ? "bottom" : "side"; }),
-    toggle("Which edge the panels sit against", main.dataset.side === "left" ? "⇤ left" : "⇥ right",
-      () => { main.dataset.side = main.dataset.side === "left" ? "right" : "left"; }),
-    toggle("Record and conversation: side by side, or one above the other",
-      main.dataset.flow === "row" ? "◫ side by side" : "▤ stacked",
-      () => { main.dataset.flow = main.dataset.flow === "row" ? "stack" : "row"; }),
-    toggle("Swap the record and the conversation", "⇄",
-      () => { main.dataset.order = main.dataset.order === "chat-first" ? "record-first" : "chat-first"; })
-  );
-  bar.append(controls);
-
   const qa = document.createElement("button");
   qa.type = "button";
   qa.className = "mode-toggle";
+  qa.style.marginLeft = "auto";
   qa.textContent = "One question at a time";
-  qa.addEventListener("click", () => openQA());
+  qa.title = "Ask Claude to take the open questions one at a time";
+  qa.addEventListener("click", askOneAtATime);
   bar.append(qa);
 
   const apply = document.createElement("button");
@@ -1705,6 +1735,10 @@ function renderAspectBar() {
     fit();
   });
   bar.append(reset);
+
+  // The button is built empty here and carries its label only from updateApply,
+  // so a redraw of the strip has to ask for the label back.
+  updateApply();
 }
 
 /** Opens a node in the panel and dims everything it is not connected to. */
@@ -2015,73 +2049,6 @@ function resend() {
 }
 
 /**
- * The walkthrough's own field. It writes into the same conversation as the chat
- * column — one log, whichever card the words were typed on.
- */
-function questionForm(node) {
-  const box = document.createElement("div");
-  box.className = "answer";
-
-  if (node.options && node.options.length) {
-    const options = document.createElement("div");
-    options.className = "options";
-    for (const option of node.options) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "option";
-      button.textContent = option;
-      button.addEventListener("click", () => { say(option, node.id); renderQA(); });
-      options.append(button);
-    }
-
-    box.append(options);
-  }
-
-  const said = pending.chat.filter(message => message.about === node.id);
-  if (said.length) {
-    const log = document.createElement("div");
-    log.className = "chat-log";
-    for (const message of said) {
-      const line = document.createElement("div");
-      line.className = "msg " + message.role;
-      const who = document.createElement("span");
-      who.className = "who";
-      who.textContent = message.role === "you" ? "you" : "claude";
-      const text = document.createElement("span");
-      text.textContent = message.text;
-      line.append(who, text);
-      log.append(line);
-    }
-
-    box.append(log);
-  }
-
-  const compose = document.createElement("div");
-  compose.className = "compose";
-  const field = document.createElement("textarea");
-  field.rows = 2;
-  field.placeholder = "Enter sends, Shift+Enter breaks the line";
-  field.addEventListener("keydown", event => {
-    if (event.key !== "Enter" || event.shiftKey) return;
-    event.preventDefault();
-    const text = field.value.trim();
-    if (text) { say(text, node.id); renderQA(); }
-  });
-
-  const send = document.createElement("button");
-  send.type = "button";
-  send.textContent = "Send";
-  send.addEventListener("click", () => {
-    const text = field.value.trim();
-    if (text) { say(text, node.id); renderQA(); }
-  });
-
-  compose.append(field, send);
-  box.append(compose);
-  return box;
-}
-
-/**
  * Takes the map's data again after it changed on disk and grows the graph in
  * place: new nodes arrive with a mark on them, so it is visible that they were
  * just built rather than always there.
@@ -2145,10 +2112,15 @@ async function growMap() {
   return true;
 }
 
+/** The questions the map still has open, in the order the map lists them. */
+function openQuestions() {
+  return visibleNodes(hidden)
+    .filter(node => node.kind === "question" && node.status === "open" && !settled.has(node.id));
+}
+
 /** Redraws what shows the conversation, so it stays current. */
 function refreshBlock() {
   renderChat();
-  if (!document.getElementById("qa").hidden) renderQA();
 }
 
 /** Saves the draft and refreshes everything that shows how much is waiting. */
@@ -2302,173 +2274,96 @@ function openCode(ref) {
   close.addEventListener("click", closeCode);
 
   head.append(path, lines, spacer, copy, close);
-  card.append(head);
 
   const body = document.createElement("pre");
   body.className = "code-body";
-  const first = parseInt(String(ref.lines || "1").split("-")[0], 10) || 1;
-
-  const coloured = Array.isArray(ref.html) ? ref.html : null;
-  (ref.code || "").split("\n").forEach((line, index) => {
-    const row = document.createElement("div");
-    row.className = "row";
-    const number = document.createElement("span");
-    number.className = "ln";
-    number.textContent = first + index;
-    const code = document.createElement("code");
-    if (coloured && coloured[index] !== undefined) code.innerHTML = coloured[index];
-    else code.textContent = line;
-    row.append(number, code);
-    body.append(row);
-  });
-
-  card.append(body);
+  card.append(head, body);
   box.append(card);
   close.focus();
+
+  const cited = citedRange(ref);
+  // The fragment the map carries is shown at once, because it needs no server.
+  // The whole file replaces it when the server answers: fifteen lines say what
+  // the line is and nothing about what it sits in.
+  fillCode(body, ref.code || "", Array.isArray(ref.html) ? ref.html : null, cited.from, cited);
+
+  if (!window.mapBridge || typeof window.mapBridge.source !== "function") return;
+
+  window.mapBridge.source(ref.file).then(file => {
+    if (box.hidden) return;
+    fillCode(body, file.code || "", Array.isArray(file.html) ? file.html : null, 1, cited);
+    if (file.clipped) lines.textContent = `${lines.textContent} · first part of the file`;
+    const mark = body.querySelector(".row.cited");
+    if (mark) body.scrollTop = Math.max(0, mark.offsetTop - body.clientHeight / 3);
+  }).catch(() => {
+    // No server, or the file has moved since the map was built: the fragment
+    // stored in the map is what the reader gets, and it is already on screen.
+  });
+}
+
+/** The first and last line the map cites, as numbers of the file. */
+function citedRange(ref) {
+  const parts = String(ref.lines || "").split("-");
+  const from = parseInt(parts[0], 10) || 1;
+  const to = parseInt(parts[1], 10) || from + (ref.code || "").split("\n").length - 1;
+  return { from, to };
+}
+
+/**
+ * Draws `code` into `body`, one row per line, numbering from `first`. `marked`
+ * carries the same lines with colouring when a highlighter ran; a line it does
+ * not cover falls back to plain text. Rows inside `cited` are marked, so the
+ * lines the map points at stay findable in a file of four thousand.
+ */
+function fillCode(body, code, marked, first, cited) {
+  body.textContent = "";
+
+  code.split("\n").forEach((line, index) => {
+    const number = first + index;
+    const row = document.createElement("div");
+    row.className = "row";
+    if (number >= cited.from && number <= cited.to) row.classList.add("cited");
+
+    const label = document.createElement("span");
+    label.className = "ln";
+    label.textContent = number;
+
+    const text = document.createElement("code");
+    if (marked && marked[index] !== undefined) text.innerHTML = marked[index];
+    else text.textContent = line;
+
+    row.append(label, text);
+    body.append(row);
+  });
 }
 
 function closeCode() {
   document.getElementById("codeWindow").hidden = true;
 }
 
-// One question at a time: the same answering, shown one card at a time so the
-// reader is not asked to hold five open questions in their head at once.
-let qaIndex = 0;
-let qaNode = null;
+// What the button says to Claude. It names the mode and what the mode is for,
+// because the agent on the other end reads it as an instruction, not as chat.
+const ONE_AT_A_TIME =
+  "Work through the open questions on this map one at a time: ask one question, "
+  + "wait for the answer here, write what it settles onto the map, then ask the next. "
+  + "One question per turn, and no lists.";
 
-function openQuestions() {
-  return visibleNodes(hidden)
-    .filter(node => node.kind === "question" && node.status === "open" && !settled.has(node.id));
-}
-
-function openQA(index = 0) {
-  qaIndex = index;
-  qaNode = null;
-  document.getElementById("qa").hidden = false;
-  renderQA();
-}
-
-function closeQA() {
-  document.getElementById("qa").hidden = true;
-  if (selected) select(selected);
-}
-
-function renderQA() {
-  const box = document.getElementById("qa");
-  // Keep what is half-written and where the caret sits: this redraws on every
-  // reply that arrives, and losing a sentence mid-word is unforgivable.
-  const old = box.querySelector("textarea");
-  const draft = old ? old.value : "";
-  const hadFocus = old && document.activeElement === old;
-  const caret = old ? old.selectionStart : 0;
-
-  box.textContent = "";
-
+/**
+ * Hands the mode to Claude instead of opening a window over the map. The page
+ * has no way to conduct an interview on its own: the questions are Claude's,
+ * and the answers only mean anything once Claude has read them. So the button
+ * says so in the conversation, and the map goes on showing what is open.
+ */
+function askOneAtATime() {
   const questions = openQuestions();
-  const card = document.createElement("div");
-  card.className = "qa-card";
-
-  if (questions.length === 0) {
-    card.classList.add("qa-empty");
-    const text = document.createElement("p");
-    text.textContent = "No open questions on the map.";
-    const back = document.createElement("button");
-    back.type = "button";
-    back.className = "ghost";
-    back.textContent = "Back to the map";
-    back.addEventListener("click", closeQA);
-    card.append(text, back);
-    box.append(card);
+  if (!questions.length) {
+    toast("No open questions on the map");
     return;
   }
 
-  // Follow the question itself: settling another one shortens the list, and an
-  // index would then point at a different card than the reader was answering.
-  if (qaNode) {
-    const stillThere = questions.findIndex(question => question.id === qaNode);
-    if (stillThere >= 0) qaIndex = stillThere;
-  }
-
-  qaIndex = Math.max(0, Math.min(qaIndex, questions.length - 1));
-  const node = questions[qaIndex];
-  qaNode = node.id;
-  const owner = aspectOwners();
-  card.style.setProperty("--aspect-color", aspectColour.get(owner.get(node.id)) || "var(--accent)");
-
-  const head = document.createElement("div");
-  head.className = "qa-head";
-  const where = document.createElement("span");
-  where.textContent = byId.get(owner.get(node.id))?.title || "question";
-  const position = document.createElement("span");
-  position.textContent = `${qaIndex + 1} of ${questions.length}`;
-  const dots = document.createElement("span");
-  dots.className = "qa-dots";
-  questions.forEach((question, index) => {
-    const dot = document.createElement("i");
-    if (answerOf(question.id) !== null) dot.classList.add("done");
-    if (index === qaIndex) dot.classList.add("here");
-    dots.append(dot);
-  });
-  head.append(where, position, dots);
-  card.append(head);
-
-  const title = document.createElement("h2");
-  title.textContent = node.title;
-  card.append(title);
-
-  if (node.body) {
-    const body = document.createElement("p");
-    body.className = "body";
-    body.textContent = node.body;
-    card.append(body);
-  }
-
-  if (node.why) {
-    const why = document.createElement("p");
-    why.className = "why";
-    why.textContent = node.why;
-    card.append(why);
-  }
-
-  card.append(questionForm(node));
-
-  const actions = document.createElement("div");
-  actions.className = "qa-actions";
-
-  const back = document.createElement("button");
-  back.type = "button";
-  back.className = "ghost";
-  back.textContent = "← Previous";
-  back.disabled = qaIndex === 0;
-  back.addEventListener("click", () => { qaIndex -= 1; renderQA(); });
-
-  const next = document.createElement("button");
-  next.type = "button";
-  next.className = "ghost";
-  next.textContent = qaIndex === questions.length - 1 ? "Done" : "Next →";
-  next.addEventListener("click", () => {
-    if (qaIndex === questions.length - 1) closeQA();
-    else { qaIndex += 1; renderQA(); }
-  });
-
-  const toMap = document.createElement("button");
-  toMap.type = "button";
-  toMap.className = "ghost grow";
-  toMap.textContent = "Show on the map";
-  toMap.addEventListener("click", () => { closeQA(); select(node.id); });
-
-  actions.append(back, next, toMap);
-  card.append(actions);
-  box.append(card);
-
-  const field = box.querySelector("textarea");
-  if (field && draft) {
-    field.value = draft;
-    if (hadFocus) {
-      field.focus();
-      field.setSelectionRange(caret, caret);
-    }
-  }
+  select(questions[0].id);
+  say(ONE_AT_A_TIME, questions[0].id);
+  toast("Claude has the mode — one question at a time");
 }
 
 /**
@@ -2594,13 +2489,13 @@ document.addEventListener("keydown", event => {
   const inField = event.target instanceof HTMLElement && ["TEXTAREA", "INPUT"].includes(event.target.tagName);
   if (event.key === "Escape") {
     if (!document.getElementById("codeWindow").hidden) closeCode();
-    else if (!document.getElementById("qa").hidden) closeQA();
+    else if (!layoutCard.hidden) showLayoutCard(false);
     else if (selected) clearSelection();
     return;
   }
 
   if (inField) return;
-  if (event.key === "q") openQA();
+  if (event.key === "q") askOneAtATime();
 });
 
 document.getElementById("fit").addEventListener("click", () => { moved = false; fit(); });
@@ -2620,7 +2515,9 @@ if (location.protocol === "http:" || location.protocol === "https:") {
   window.mapBridge = {
     apply: payload => post("/api/apply", payload),
     select: id => post("/api/selection", { map: MAP.title, node: id }).catch(() => {}),
-    message: (text, about) => post("/api/message", { map: MAP.title, text, about })
+    message: (text, about) => post("/api/message", { map: MAP.title, text, about }),
+    source: file => fetch(`/api/source?file=${encodeURIComponent(file)}`)
+      .then(response => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
   };
 
   // Claude points at one question and replies in its thread; the page asks for
@@ -2721,6 +2618,29 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 const LAYOUT_KEY = "map-layout";
 const main = document.getElementById("main");
 
+const dockBody = document.getElementById("dockBody");
+const recordPane = document.getElementById("recordPane");
+const layoutButton = document.getElementById("layoutButton");
+const layoutCard = document.getElementById("layoutCard");
+
+// The smallest a pane or the graph is allowed to become while a handle is
+// dragged, in CSS pixels: below this the pane holds nothing readable.
+const MIN_PANE = 160;
+
+// The six arrangements the card offers. Three axes — which edge the dock stands
+// against, whether the panes stack or stand side by side — collapse into six
+// pictures, and a picture is what a spatial choice is read from.
+// The grid reads as a table: a column says which edge the dock stands against,
+// a row says how the two panes divide it.
+const ARRANGEMENTS = [
+  { layout: "side", side: "left", flow: "stack", title: "Panels left, one above the other" },
+  { layout: "bottom", side: "right", flow: "stack", title: "Panels below, one above the other" },
+  { layout: "side", side: "right", flow: "stack", title: "Panels right, one above the other" },
+  { layout: "side", side: "left", flow: "row", title: "Panels left, side by side" },
+  { layout: "bottom", side: "right", flow: "row", title: "Panels below, side by side" },
+  { layout: "side", side: "right", flow: "row", title: "Panels right, side by side" }
+];
+
 function loadLayout() {
   try {
     const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}");
@@ -2728,8 +2648,9 @@ function loadLayout() {
     if (saved.side) main.dataset.side = saved.side;
     if (saved.flow) main.dataset.flow = saved.flow;
     if (saved.order) main.dataset.order = saved.order;
+    if (saved.fold) main.dataset.fold = saved.fold;
     if (saved.dock) main.style.setProperty("--dock", saved.dock);
-    if (saved.record) main.style.setProperty("--record", saved.record);
+    if (saved.record) sizeRecord(saved.record);
   } catch (error) {
     // Nothing saved, or storage is unavailable: the defaults stand.
   }
@@ -2742,6 +2663,7 @@ function saveLayout() {
       side: main.dataset.side,
       flow: main.dataset.flow,
       order: main.dataset.order,
+      fold: main.dataset.fold || undefined,
       dock: main.style.getPropertyValue("--dock").trim() || undefined,
       record: main.style.getPropertyValue("--record").trim() || undefined
     }));
@@ -2751,49 +2673,241 @@ function saveLayout() {
 }
 
 /**
- * Drags one handle. `variable` is the size it changes; which screen axis that
- * is depends on the orientation, so it is read at the start of each drag.
+ * Gives the record a height of its own. The cap that keeps an unsized record
+ * from eating the conversation is lifted at the same time: once the reader has
+ * dragged the handle, a pane that refuses to follow reads as a broken handle.
  */
-function draggable(handle, variable, invert) {
-  // Which screen axis a handle moves along depends on where the dock sits and
-  // whether its panes are stacked, so it is worked out at every drag.
-  const axis = () => {
-    if (variable === "--dock") return main.dataset.layout === "side" ? "x" : "y";
-    return main.dataset.flow === "row" ? "x" : "y";
-  };
+function sizeRecord(length) {
+  main.style.setProperty("--record", length);
+  main.style.setProperty("--record-cap", "none");
+}
 
+/**
+ * One arrangement drawn as a small picture: the graph block, and the two panels
+ * where this arrangement puts them. Everything is painted in `currentColor`, so
+ * the picture takes the accent when its button is the chosen one.
+ */
+function arrangementIcon(spec, width = 42, height = 28) {
+  const svg = el("svg", { width, height, viewBox: `0 0 ${width} ${height}`, "aria-hidden": "true" });
+  svg.append(el("rect", {
+    x: .5, y: .5, width: width - 1, height: height - 1, rx: 3,
+    fill: "none", stroke: "currentColor", "stroke-width": 1, opacity: .55
+  }));
+
+  const block = (x, y, w, h, opacity) =>
+    svg.append(el("rect", { x, y, width: w, height: h, rx: 1.5, fill: "currentColor", opacity }));
+
+  // Every length is a share of the frame: the same picture has to read at the
+  // size of a button and at the size of a card tile.
+  const pad = Math.max(2, Math.round(height * .11));
+  const gap = height >= 24 ? 2 : 1;
+
+  if (spec.layout === "side") {
+    const dockSize = Math.max(6, Math.round(width * .34));
+    const dockX = spec.side === "left" ? pad : width - pad - dockSize;
+    const graphX = spec.side === "left" ? dockX + dockSize + gap : pad;
+    block(graphX, pad, width - dockSize - 2 * pad - gap, height - 2 * pad, .2);
+
+    if (spec.flow === "stack") {
+      const half = (height - 2 * pad - gap) / 2;
+      block(dockX, pad, dockSize, half, .6);
+      block(dockX, pad + half + gap, dockSize, half, .6);
+    } else {
+      const half = (dockSize - gap) / 2;
+      block(dockX, pad, half, height - 2 * pad, .6);
+      block(dockX + half + gap, pad, half, height - 2 * pad, .6);
+    }
+
+    return svg;
+  }
+
+  const dockSize = Math.max(5, Math.round(height * .36));
+  const graphHeight = height - 2 * pad - dockSize - gap;
+  const dockY = pad + graphHeight + gap;
+  block(pad, pad, width - 2 * pad, graphHeight, .2);
+
+  if (spec.flow === "row") {
+    const half = (width - 2 * pad - gap) / 2;
+    block(pad, dockY, half, dockSize, .6);
+    block(pad + half + gap, dockY, half, dockSize, .6);
+  } else {
+    const half = (dockSize - gap) / 2;
+    block(pad, dockY, width - 2 * pad, half, .6);
+    block(pad, dockY + half + gap, width - 2 * pad, half, .6);
+  }
+
+  return svg;
+}
+
+/** True when the page is arranged the way this picture shows it. */
+function isCurrent(spec) {
+  if (spec.layout !== main.dataset.layout || spec.flow !== main.dataset.flow) return false;
+  return spec.layout !== "side" || spec.side === main.dataset.side;
+}
+
+function chevronIcon(direction) {
+  const svg = el("svg", { width: 14, height: 14, viewBox: "0 0 16 16", "aria-hidden": "true" });
+  const path = direction === "up" ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4";
+  svg.append(el("path", {
+    d: path, fill: "none", stroke: "currentColor",
+    "stroke-width": 1.5, "stroke-linecap": "round", "stroke-linejoin": "round"
+  }));
+  return svg;
+}
+
+function swapIcon() {
+  const svg = el("svg", { width: 14, height: 14, viewBox: "0 0 16 16", "aria-hidden": "true" });
+  svg.append(el("path", {
+    d: "M3 6h9l-2.5-2.5M13 10H4l2.5 2.5", fill: "none", stroke: "currentColor",
+    "stroke-width": 1.4, "stroke-linecap": "round", "stroke-linejoin": "round"
+  }));
+  return svg;
+}
+
+/** Applies one arrangement and redraws everything that shows it. */
+function arrange(change) {
+  change();
+  saveLayout();
+  renderLayout();
+  fit();
+}
+
+function renderLayoutCard() {
+  layoutCard.textContent = "";
+
+  const label = document.createElement("span");
+  label.className = "card-label";
+  label.textContent = "Arrangement";
+  layoutCard.append(label);
+
+  const grid = document.createElement("div");
+  grid.className = "grid";
+
+  for (const spec of ARRANGEMENTS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.title = spec.title;
+    button.setAttribute("aria-label", spec.title);
+    button.setAttribute("aria-pressed", String(isCurrent(spec)));
+    button.append(arrangementIcon(spec));
+    button.addEventListener("click", () => arrange(() => {
+      main.dataset.layout = spec.layout;
+      main.dataset.side = spec.side;
+      main.dataset.flow = spec.flow;
+    }));
+    grid.append(button);
+  }
+
+  layoutCard.append(grid);
+
+  const swap = document.createElement("button");
+  swap.type = "button";
+  swap.className = "swap";
+  swap.title = "Swap the record and the conversation";
+  const order = document.createElement("span");
+  order.textContent = main.dataset.order === "chat-first" ? "Conversation first" : "Record first";
+  swap.append(order, swapIcon());
+  swap.addEventListener("click", () => arrange(() => {
+    main.dataset.order = main.dataset.order === "chat-first" ? "record-first" : "chat-first";
+  }));
+  layoutCard.append(swap);
+}
+
+/** Redraws the layout button, the card behind it and the two fold buttons. */
+function renderLayout() {
+  layoutButton.textContent = "";
+  const current = ARRANGEMENTS.find(isCurrent) || ARRANGEMENTS[2];
+  layoutButton.append(arrangementIcon(current, 24, 16), chevronIcon("down"));
+  layoutButton.title = `${current.title} — press to change`;
+
+  for (const button of document.querySelectorAll(".fold")) {
+    const folded = main.dataset.fold === button.dataset.fold;
+    const name = button.dataset.fold === "record" ? "the record" : "the conversation";
+    button.textContent = "";
+    button.append(chevronIcon(folded ? "down" : "up"));
+    button.title = folded ? `Unfold ${name}` : `Fold ${name}`;
+    button.setAttribute("aria-expanded", String(!folded));
+  }
+
+  if (!layoutCard.hidden) renderLayoutCard();
+}
+
+function showLayoutCard(open) {
+  layoutCard.hidden = !open;
+  layoutButton.setAttribute("aria-expanded", String(open));
+  if (open) renderLayoutCard();
+}
+
+layoutButton.addEventListener("click", event => {
+  event.stopPropagation();
+  showLayoutCard(layoutCard.hidden);
+});
+
+document.addEventListener("click", event => {
+  if (!layoutCard.hidden && !layoutCard.contains(event.target)) showLayoutCard(false);
+});
+
+for (const button of document.querySelectorAll(".fold")) {
+  button.addEventListener("click", () => arrange(() => {
+    if (main.dataset.fold === button.dataset.fold) delete main.dataset.fold;
+    else main.dataset.fold = button.dataset.fold;
+  }));
+}
+
+/**
+ * Drags one handle. `variable` is the length the drag writes, `panel` the
+ * element that length sizes, `within` the box the panel may not fill entirely.
+ *
+ * Which way the pointer moves and which way the panel grows are read from the
+ * boxes at the start of every drag rather than from the arrangement: the phone
+ * rules put the dock below whatever the arrangement says, and a drag that
+ * trusts the arrangement then pulls the wrong way.
+ */
+function draggable(handle, variable, panel, within) {
   handle.addEventListener("pointerdown", event => {
+    if (main.dataset.fold) return;
     event.preventDefault();
     handle.setPointerCapture(event.pointerId);
-    const box = main.getBoundingClientRect();
-    const startSize = parseFloat(getComputedStyle(main).getPropertyValue(variable));
-    const start = axis() === "x" ? event.clientX : event.clientY;
-    const flip = invert() ? -1 : 1;
+
+    const grip = handle.getBoundingClientRect();
+    const box = panel.getBoundingClientRect();
+    const bounds = within.getBoundingClientRect();
+    const horizontal = grip.width < grip.height;
+    const startSize = horizontal ? box.width : box.height;
+    const start = horizontal ? event.clientX : event.clientY;
+    const limit = horizontal ? bounds.width : bounds.height;
+    // A panel lying past the handle grows as the pointer comes back towards the
+    // origin; one lying before it grows as the pointer goes the other way.
+    const flip = (horizontal ? box.left < grip.left : box.top < grip.top) ? -1 : 1;
 
     const move = moveEvent => {
-      const now = axis() === "x" ? moveEvent.clientX : moveEvent.clientY;
-      const limit = axis() === "x" ? box.width : box.height;
-      const next = Math.min(Math.max(startSize + (start - now) * flip, 160), limit - 160);
-      main.style.setProperty(variable, `${Math.round(next)}px`);
+      const now = horizontal ? moveEvent.clientX : moveEvent.clientY;
+      const room = Math.max(limit - MIN_PANE, MIN_PANE);
+      const next = Math.min(Math.max(startSize + (start - now) * flip, MIN_PANE), room);
+      if (variable === "--record") sizeRecord(`${Math.round(next)}px`);
+      else main.style.setProperty(variable, `${Math.round(next)}px`);
       applyTransform();
     };
 
     const up = () => {
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
       saveLayout();
       fit();
     };
 
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
   });
 }
 
-draggable(document.getElementById("splitMain"), "--dock", () => main.dataset.side === "left" && main.dataset.layout === "side");
-draggable(document.getElementById("splitDock"), "--record", () => main.dataset.order === "chat-first");
+draggable(document.getElementById("splitMain"), "--dock", document.getElementById("dock"), main);
+draggable(document.getElementById("splitDock"), "--record", recordPane, dockBody);
 
 loadLayout();
+renderLayout();
 
 const chatField = document.getElementById("chatField");
 chatField.addEventListener("keydown", event => {

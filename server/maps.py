@@ -19,7 +19,7 @@ import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import sys
 
@@ -29,6 +29,10 @@ import mapkit
 
 STATE_DIR = ".clauded"
 MAX_BODY = 1 << 20
+
+# How much of a cited file the code window may ask for. A generated file runs to
+# megabytes on one line, and the page holds the answer in memory.
+SOURCE_LINES = 4000
 
 # Bumped whenever a tool writes a map, so a page can tell it must refetch even
 # when two writes land in the same second.
@@ -316,6 +320,10 @@ class Handler(BaseHTTPRequestHandler):
             self.json_reply(200, data)
             return
 
+        if path == "/api/source":
+            self.serve_source(root)
+            return
+
         if path == "/api/inbox":
             state = self.server.state
             # Draining the inbox is Claude reaching for the map, which is as
@@ -370,6 +378,40 @@ class Handler(BaseHTTPRequestHandler):
         names = maps_in(self.server.root)
         stamps = sorted(f"{name}:{mapkit.map_stamp(path)}" for name, path in names.items())
         return f"{GENERATION[0]}|" + "|".join(stamps)
+
+    def serve_source(self, root):
+        """
+        Serves one file of the project whole, coloured the same way a cited
+        fragment is. The code window opens on the cited lines and scrolls
+        through the rest: a fragment cut to fifteen lines answers what the line
+        says and nothing about what it sits in.
+        """
+        base = Path(root).resolve()
+        wanted = (parse_qs(urlsplit(self.path).query).get("file") or [""])[0]
+        target = (base / wanted).resolve()
+
+        # A path is a request from the page, and the page is one reload away
+        # from carrying anything: nothing outside the project is served.
+        if not wanted or base not in target.parents:
+            self.json_reply(403, {"error": "not a file of this project"})
+            return
+
+        if not target.is_file():
+            self.json_reply(404, {"error": f"no file at {wanted}"})
+            return
+
+        text = target.read_text(encoding="utf-8", errors="replace")
+        lines = text.split("\n")
+        clipped = len(lines) > SOURCE_LINES
+        if clipped:
+            text = "\n".join(lines[:SOURCE_LINES])
+
+        self.json_reply(200, {
+            "file": wanted,
+            "code": text,
+            "html": mapkit.colour(text, target.name),
+            "clipped": clipped,
+        })
 
     def do_POST(self):
         path = unquote(self.path.split("?")[0])

@@ -78,5 +78,11 @@ With the plugin's MCP server running, the loop is:
 5. `wait_for_apply` when the questions are done. Work starts on what it returns,
    and not before.
 
+The page's "One question at a time" button opens nothing of its own: it writes
+the mode into the conversation as a message from Edmond, pointed at the first
+open question. Reaching it means the loop above is what he wants — take the
+questions one by one with `ask_on_map`, and settle each with `resolve_on_map`
+before asking the next.
+
 Without the server, the same loop runs through the chat, and Apply puts the
 threads on the clipboard for Edmond to paste.
