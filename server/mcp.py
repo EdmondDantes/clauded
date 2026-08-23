@@ -5,6 +5,7 @@ Speaks JSON-RPC over stdin and stdout, one message per line, and runs the local
 map server in the same process. Four tools:
 
     open_map          render a map and hand back its address
+    select_on_map     point at a node without waiting for anything
     read_state        what is selected, and every thread as it stands
     ask_on_map        point at one question and wait for the next thing said there
     wait_for_message  wait for anything said anywhere on the map — the chat loop
@@ -46,8 +47,20 @@ TOOLS = [
     },
     {
         "name": "read_state",
-        "description": "What the open map shows now: the selected node, every thread with its messages, and the last Apply. Does not wait.",
+        "description": "What the open map shows now: the selected node, the whole conversation, what is settled, and the last Apply. Does not wait.",
         "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "select_on_map",
+        "description": "Select a node on the open map, making it the subject of what the reader writes next. Does not wait.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "node": {"type": "string", "description": "Node id to select"},
+                "note": {"type": "string", "description": "One line shown with it"},
+            },
+            "required": ["node"],
+        },
     },
     {
         "name": "ask_on_map",
@@ -64,19 +77,19 @@ TOOLS = [
     },
     {
         "name": "reply_on_map",
-        "description": "Write a reply into a node's thread, where it appears as a chat message from Claude. Does not wait.",
+        "description": "Write into the map's conversation, where it appears as a chat message from Claude. Does not wait.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "node": {"type": "string", "description": "Node id whose thread the reply belongs to"},
                 "text": {"type": "string", "description": "The reply, as the reader will see it"},
+                "node": {"type": "string", "description": "Node the reply is about; shown as its subject"},
             },
-            "required": ["node", "text"],
+            "required": ["text"],
         },
     },
     {
         "name": "wait_for_message",
-        "description": "Wait for the next message the reader writes anywhere on the map, and return it with its node. Call it again after replying to keep the conversation going.",
+        "description": "Wait for the next messages the reader writes in the map's conversation; each carries the node it is about. Call it again after replying to keep talking.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -174,10 +187,16 @@ def tool_read_state(session, args):
     return json.dumps(state.snapshot(), ensure_ascii=False, indent=2)
 
 
-def said_by_reader(snapshot, node, seen):
-    """The reader's messages in a thread beyond the ones already counted."""
-    mine = [m for m in snapshot["threads"].get(node, []) if m["role"] == "you"]
+def said_by_reader(snapshot, seen):
+    """The reader's messages beyond the ones already counted."""
+    mine = [m for m in snapshot["chat"] if m["role"] == "you"]
     return mine[seen:] or None
+
+
+def tool_select_on_map(session, args):
+    state, url = session.ensure()
+    state.update(focus={"node": args["node"], "note": args.get("note", "")})
+    return f"{args['node']} is selected on the map at {url}."
 
 
 def tool_ask_on_map(session, args):
@@ -185,58 +204,43 @@ def tool_ask_on_map(session, args):
     node = args["node"]
     timeout = float(args.get("timeout_seconds", 900))
 
-    seen = len([m for m in state.snapshot()["threads"].get(node, []) if m["role"] == "you"])
+    seen = len([m for m in state.snapshot()["chat"] if m["role"] == "you"])
     state.update(focus={"node": node, "note": args.get("note", "")})
-    fresh = state.wait_for(lambda snap: said_by_reader(snap, node, seen), timeout)
+    fresh = state.wait_for(lambda snap: said_by_reader(snap, seen), timeout)
 
     if fresh is None:
         state.update(focus=None)
         return f"Nothing said about {node} within {timeout:.0f}s. The question is still open on the map at {url}."
 
-    return json.dumps({"node": node, "said": [message["text"] for message in fresh]}, ensure_ascii=False)
+    return json.dumps({"asked": node, "said": [{"text": m["text"], "about": m["about"]} for m in fresh]}, ensure_ascii=False)
 
 
 def tool_wait_for_message(session, args):
     state, url = session.ensure()
     timeout = float(args.get("timeout_seconds", 1500))
+    seen = len([m for m in state.snapshot()["chat"] if m["role"] == "you"])
 
-    def counted(snapshot):
-        return sum(len([m for m in messages if m["role"] == "you"])
-                   for messages in snapshot["threads"].values())
-
-    seen = counted(state.snapshot())
-
-    def fresh(snapshot):
-        if counted(snapshot) <= seen:
-            return None
-        latest = None
-        for node, messages in snapshot["threads"].items():
-            for message in messages:
-                if message["role"] != "you":
-                    continue
-                if latest is None or message["at"] >= latest[1]["at"]:
-                    latest = (node, message)
-        return latest
-
-    found = state.wait_for(fresh, timeout)
-    if found is None:
+    fresh = state.wait_for(lambda snap: said_by_reader(snap, seen), timeout)
+    if fresh is None:
         return f"Nothing said on the map within {timeout:.0f}s. It is still open at {url}."
 
-    node, message = found
-    return json.dumps({"node": node, "text": message["text"], "at": message["at"]}, ensure_ascii=False)
+    return json.dumps(
+        [{"text": m["text"], "about": m["about"], "at": m["at"]} for m in fresh],
+        ensure_ascii=False,
+    )
 
 
 def tool_resolve_on_map(session, args):
     state, _ = session.ensure()
-    state.add_message(args["node"], "claude", f"Settled: {args['answer']}")
+    state.add_message("claude", f"Settled: {args['answer']}", args["node"])
     state.resolve(args["node"], args["answer"])
     return f"{args['node']} is marked settled: {args['answer']}"
 
 
 def tool_reply_on_map(session, args):
     state, _ = session.ensure()
-    state.add_message(args["node"], "claude", args["text"])
-    return f"Replied in the thread of {args['node']}."
+    state.add_message("claude", args["text"], args.get("node"))
+    return "Replied in the conversation." + (f" Subject: {args['node']}." if args.get("node") else "")
 
 
 def tool_wait_for_apply(session, args):
@@ -256,6 +260,7 @@ def tool_wait_for_apply(session, args):
 
 HANDLERS = {
     "open_map": tool_open_map,
+    "select_on_map": tool_select_on_map,
     "read_state": tool_read_state,
     "ask_on_map": tool_ask_on_map,
     "wait_for_message": tool_wait_for_message,

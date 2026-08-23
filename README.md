@@ -50,9 +50,9 @@ missing — all four look on the page like a record that exists.
 - **Walk it.** Click a node to read the full record; its neighbours stay lit and
   everything else dims. Aspects carry their own colour and can be dropped from
   the view and brought back from the strip at the top.
-- **Talk on it.** Every node has one thread. The options are shortcuts that send
-  themselves; anything else — an answer, a question back, a correction — goes
-  through the same field, and Claude's replies land in the same thread.
+- **Talk on it.** One conversation for the whole map, in its own column. What
+  you select becomes the subject of the next line, and each line shows the
+  subject it had; Claude selects a node too, when the answer is due there.
 - **One question at a time.** Press `q` for the walkthrough: one card, one
   question, progress across the top.
 - **Read the code.** A node can cite files; the fragment is copied into the page
@@ -73,7 +73,8 @@ in the chat:
 |---|---|
 | `open_map` | render a map and hand back its address |
 | `read_state` | the selected node and every thread as it stands |
-| `ask_on_map` | point at one question and block until something is said there |
+| `select_on_map` | point at a node, making it the subject, without waiting |
+| `ask_on_map` | point at one question and block until something is said |
 | `wait_for_message` | block until anything is written anywhere on the map |
 | `reply_on_map` | write a reply into a node's thread |
 | `resolve_on_map` | mark a question settled, so the map shows it closed |

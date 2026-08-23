@@ -68,7 +68,7 @@ class State:
         self.lock = threading.Condition()
         self.version = 0
         self.selection = None
-        self.threads = {}
+        self.chat = []
         self.resolved = {}
         self.applied = None
         self.focus = None
@@ -78,7 +78,7 @@ class State:
             return {
                 "version": self.version,
                 "selection": self.selection,
-                "threads": {node: list(messages) for node, messages in self.threads.items()},
+                "chat": list(self.chat),
                 "resolved": dict(self.resolved),
                 "applied": self.applied,
                 "focus": self.focus,
@@ -107,15 +107,25 @@ class State:
                     return None
                 self.lock.wait(min(1.0, left))
 
-    def add_message(self, node, role, text):
-        """Appends one line to a node's thread and wakes whoever waits on it."""
-        message = {"role": role, "text": text, "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    def add_message(self, role, text, about=None):
+        """
+        Appends one line to the single conversation and wakes whoever waits.
+
+        `about` is the node selected when the line was written — the subject, not
+        a separate thread: one chat is easier to follow than a dozen.
+        """
+        message = {
+            "role": role,
+            "text": text,
+            "about": about,
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
 
         with self.lock:
-            self.threads.setdefault(node, []).append(message)
+            self.chat.append(message)
             # An answer settles the question Claude pointed at, so the pointer
             # goes away and the page stops showing it as waited on.
-            if role == "you" and self.focus and self.focus.get("node") == node:
+            if role == "you" and self.focus and (about is None or self.focus.get("node") == about):
                 self.focus = None
             self.version += 1
             self.lock.notify_all()
@@ -135,12 +145,8 @@ class State:
         self._persist()
 
     def replies_for_page(self):
-        """Claude's side of every thread, which is what the page does not have."""
-        snapshot = self.snapshot()
-        return {
-            node: [message for message in messages if message["role"] == "claude"]
-            for node, messages in snapshot["threads"].items()
-        }
+        """Claude's side of the conversation, which is what the page does not have."""
+        return [message for message in self.snapshot()["chat"] if message["role"] == "claude"]
 
     def update(self, **fields):
         with self.lock:
@@ -242,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/selection":
             state.update(selection=payload)
         elif path == "/api/message":
-            state.add_message(payload.get("node"), "you", payload.get("text", ""))
+            state.add_message("you", payload.get("text", ""), payload.get("about"))
         else:
             state.update(applied=payload, focus=None)
 

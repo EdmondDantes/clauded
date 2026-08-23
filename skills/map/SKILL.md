@@ -67,7 +67,8 @@ With the plugin's MCP server running, the loop is:
 1. `open_map` — the map opens where Edmond can see it.
 2. `ask_on_map` with one node id. The call blocks, the page opens that question
    and marks it as waited on. Ask one question, never a list.
-3. Read what came back and answer in the same thread with `reply_on_map`. When
+3. Read what came back and answer with `reply_on_map` — one conversation, and
+   the node id you pass is its subject. When
    the question is settled, `resolve_on_map` marks it on the map so Edmond can
    see it is closed, then ask the next one.
 4. `wait_for_message` between questions: it waits for anything Edmond writes
