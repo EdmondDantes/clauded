@@ -13,6 +13,7 @@ this is one person's tool, not a service.
 """
 
 import json
+import os
 import threading
 import time
 from datetime import datetime, timezone
@@ -73,6 +74,12 @@ class State:
         self.applied = None
         self.focus = None
         self.listeners = 0
+        # When Claude was last seen doing anything for this map. A blocked wait
+        # is only one of the states: between them Claude is working, not gone.
+        self.last_seen = 0.0
+        # Set when the reader presses "End conversation": whoever is waiting
+        # learns the talk is over instead of hanging until a timeout.
+        self.ended = False
         # How many of the reader's messages have already been handed to Claude,
         # so the same line is not delivered twice.
         self.delivered = 0
@@ -102,6 +109,26 @@ class State:
         self.resolved = data.get("resolved") or {}
         self.applied = data.get("applied")
 
+    def touch(self):
+        """Records that Claude is on this map right now."""
+        with self.lock:
+            self.last_seen = time.monotonic()
+
+    def presence(self, idle_after=45.0):
+        """
+        Returns waiting, working or offline.
+
+        waiting — a call is blocked on the reader's next message;
+        working — no call is blocked, but Claude acted within `idle_after`;
+        offline — nothing for longer than that, so a message will wait.
+        """
+        with self.lock:
+            if self.listeners > 0:
+                return "waiting"
+            if self.last_seen and time.monotonic() - self.last_seen < idle_after:
+                return "working"
+            return "offline"
+
     def snapshot(self):
         with self.lock:
             return {
@@ -109,6 +136,7 @@ class State:
                 "selection": self.selection,
                 "chat": list(self.chat),
                 "listeners": self.listeners,
+                "ended": self.ended,
                 "resolved": dict(self.resolved),
                 "applied": self.applied,
                 "focus": self.focus,
@@ -124,6 +152,7 @@ class State:
 
         with self.lock:
             self.listeners += 1
+            self.last_seen = time.monotonic()
 
         try:
             return self._wait_loop(test, end)
@@ -169,6 +198,8 @@ class State:
             # goes away and the page stops showing it as waited on.
             if role == "you" and self.focus and (about is None or self.focus.get("node") == about):
                 self.focus = None
+            if role == "claude":
+                self.last_seen = time.monotonic()
             self.version += 1
             self.lock.notify_all()
 
@@ -198,9 +229,14 @@ class State:
 
         return fresh
 
-    def replies_for_page(self):
-        """Claude's side of the conversation, which is what the page does not have."""
-        return [message for message in self.snapshot()["chat"] if message["role"] == "claude"]
+    def conversation(self):
+        """
+        The whole conversation, both sides.
+
+        The page keeps its own copy of what it sent, but a second window — or a
+        phone — sent lines this one never saw, so everything travels.
+        """
+        return self.snapshot()["chat"]
 
     def update(self, **fields):
         with self.lock:
@@ -247,7 +283,11 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/inbox":
-            self.json_reply(200, {"messages": self.server.state.inbox()})
+            state = self.server.state
+            # Draining the inbox is Claude reaching for the map, which is as
+            # good a sign of presence as answering.
+            state.touch()
+            self.json_reply(200, {"messages": state.inbox()})
             return
 
         if path == "/api/updates":
@@ -255,10 +295,11 @@ class Handler(BaseHTTPRequestHandler):
             snapshot = state.snapshot()
             self.json_reply(200, {
                 "build": mapkit.build_stamp(),
-                "listening": snapshot["listeners"] > 0,
+                "presence": self.server.state.presence(),
+                "ended": snapshot["ended"],
                 "focus": snapshot["focus"],
                 "resolved": snapshot["resolved"],
-                "replies": state.replies_for_page(),
+                "chat": state.conversation(),
             })
             return
 
@@ -286,7 +327,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = unquote(self.path.split("?")[0])
-        known = {"/api/apply", "/api/selection", "/api/message"}
+        known = {"/api/apply", "/api/selection", "/api/message", "/api/end"}
         if path not in known:
             self.json_reply(404, {"error": "unknown endpoint"})
             return
@@ -305,7 +346,10 @@ class Handler(BaseHTTPRequestHandler):
         state = self.server.state
         payload["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-        if path == "/api/selection":
+        if path == "/api/end":
+            state.add_message("you", payload.get("text") or "Разговор закончен.", payload.get("about"))
+            state.update(ended=True, focus=None)
+        elif path == "/api/selection":
             state.update(selection=payload)
         elif path == "/api/message":
             state.add_message("you", payload.get("text", ""), payload.get("about"))
@@ -353,7 +397,7 @@ def start(root=".", port=8791):
     home = Path.home() / STATE_DIR
     home.mkdir(exist_ok=True)
     (home / "server.json").write_text(
-        json.dumps({"url": url, "root": str(Path(root).resolve())}), encoding="utf-8"
+        json.dumps({"url": url, "root": str(Path(root).resolve()), "pid": os.getpid()}), encoding="utf-8"
     )
 
     return server, state, url

@@ -220,7 +220,15 @@ def tool_wait_for_message(session, args):
     timeout = float(args.get("timeout_seconds", 1500))
     seen = len([m for m in state.snapshot()["chat"] if m["role"] == "you"])
 
-    fresh = state.wait_for(lambda snap: said_by_reader(snap, seen), timeout)
+    def next_line(snapshot):
+        if snapshot["ended"]:
+            return "ended"
+        return said_by_reader(snapshot, seen)
+
+    fresh = state.wait_for(next_line, timeout)
+    if fresh == "ended":
+        state.update(ended=False)
+        return "The reader ended the conversation. Stop waiting and report."
     if fresh is None:
         return f"Nothing said on the map within {timeout:.0f}s. It is still open at {url}."
 

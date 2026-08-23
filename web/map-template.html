@@ -80,6 +80,22 @@
 
   * { box-sizing: border-box; }
 
+  /* One thin scrollbar everywhere, in the page's own colours. */
+  * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+
+  *::-webkit-scrollbar { width: 7px; height: 7px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover { background: var(--ink-muted); background-clip: content-box; }
+  *::-webkit-scrollbar-corner { background: transparent; }
+
   body {
     margin: 0;
     height: 100vh;
@@ -183,9 +199,83 @@
   .swatch.rejected { border-radius: 50%; color: var(--rejected); background: var(--rejected-soft); border-style: dashed; }
 
   main {
+    --dock: 28rem;
+    --record: 16rem;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 22rem;
     min-height: 0;
+  }
+
+  /* Side: the dock stands to the right, its two panes stacked. */
+  main[data-layout="side"] {
+    grid-template-columns: minmax(0, 1fr) auto var(--dock);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  main[data-layout="side"] .dock {
+    display: grid;
+    grid-template-rows: var(--record) auto minmax(0, 1fr);
+    border-left: 1px solid var(--line);
+  }
+
+  /* Bottom: the dock lies under the graph, its two panes side by side. */
+  main[data-layout="bottom"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto var(--dock);
+  }
+
+  main[data-layout="bottom"] .dock {
+    display: grid;
+    grid-template-columns: var(--record) auto minmax(0, 1fr);
+    border-top: 1px solid var(--line);
+  }
+
+  main[data-order="chat-first"] .record-pane { order: 3; }
+  main[data-order="chat-first"] .chat-pane { order: 1; }
+  main[data-order="chat-first"] .dock > .split { order: 2; }
+
+  main[data-layout="side"][data-order="chat-first"] .dock { grid-template-rows: minmax(0, 1fr) auto var(--record); }
+  main[data-layout="bottom"][data-order="chat-first"] .dock { grid-template-columns: minmax(0, 1fr) auto var(--record); }
+
+  .dock { min-width: 0; min-height: 0; background: var(--surface); }
+
+  .pane { min-width: 0; min-height: 0; overflow: hidden; display: grid; }
+
+  .record-pane { align-content: start; padding: .8rem 1rem; overflow-y: auto; }
+
+  .chat-pane {
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    gap: .55rem;
+    padding: .8rem 1rem 1rem;
+    min-height: 0;
+  }
+
+  /* The handle between panels: drag to resize, arrows to nudge. */
+  .split { background: var(--line); touch-action: none; }
+
+  main[data-layout="side"] > .split { width: 5px; cursor: col-resize; }
+  main[data-layout="side"] .dock > .split { height: 5px; cursor: row-resize; }
+  main[data-layout="bottom"] > .split { height: 5px; cursor: row-resize; }
+  main[data-layout="bottom"] .dock > .split { width: 5px; cursor: col-resize; }
+
+  .split:hover, .split:focus-visible { background: var(--accent); outline: none; }
+
+  .layout-controls { display: flex; gap: .3rem; }
+
+  .layout-controls button {
+    font: inherit;
+    font-size: var(--step-0);
+    padding: .15rem .5rem;
+    color: var(--ink-muted);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .layout-controls button:hover, .layout-controls button:focus-visible {
+    color: var(--accent);
+    border-color: var(--accent);
+    outline: none;
   }
 
 
@@ -357,6 +447,7 @@
     cursor: default;
   }
 
+  .apply { flex: none; white-space: nowrap; }
   .apply:not([disabled]):hover { filter: brightness(1.08); }
   .apply:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -694,6 +785,8 @@
   .refs button:hover, .refs button:focus-visible { border-color: var(--accent); outline: none; }
 
   .mode-toggle {
+    flex: none;
+    white-space: nowrap;
     font: inherit;
     font-size: var(--step-0);
     padding: .2rem .7rem;
@@ -714,33 +807,64 @@
   svg.has-selection .node:not(.lit) { opacity: .3; }
   svg.has-selection .edge:not(.lit) { opacity: .2; }
 
-  .side {
-    display: grid;
-    /* The record scrolls in what is left; the conversation keeps a floor, or a
-       long record squeezes it down to a couple of lines. */
-    grid-template-rows: minmax(0, 1fr) minmax(15rem, auto);
-    border-left: 1px solid var(--line);
-    background: var(--surface);
-    min-height: 0;
+  .stage { position: relative; min-height: 0; }
+
+
+
+  .chat-head { display: flex; align-items: baseline; gap: .6rem; min-width: 0; }
+
+  .presence {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: var(--step-0);
+    color: var(--ink-muted);
+    flex: none;
+    cursor: default;
   }
 
-  .panel {
-    padding: 1.25rem;
-    overflow-y: auto;
-    overflow-x: hidden;
-    min-height: 0;
+  .presence i {
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background: var(--line-strong);
+    border: 1px solid var(--line-strong);
   }
 
-  .panel .refs button, .panel .origin { max-width: 100%; }
+  .presence b { font-weight: 500; }
 
-  .chat {
-    display: grid;
-    grid-template-rows: minmax(0, 1fr) auto auto auto;
-    gap: .5rem;
-    padding: .75rem 1rem 1rem;
-    border-top: 1px solid var(--line-strong);
-    background: var(--surface-sunk);
-    min-height: 0;
+  .presence[data-state="waiting"] { color: var(--decided); }
+  .presence[data-state="waiting"] i { background: var(--decided); border-color: var(--decided); }
+
+  .presence[data-state="working"] { color: var(--open); }
+  .presence[data-state="working"] i { background: var(--open); border-color: var(--open); }
+
+  .presence[data-state="offline"] i { background: transparent; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .presence[data-state="working"] i { animation: breathe 2s ease-in-out infinite; }
+  }
+
+  @keyframes breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .35; }
+  }
+
+  .chat-subject {
+    font-size: var(--step-0);
+    color: var(--ink-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-subject button {
+    font: inherit;
+    color: var(--accent);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
   }
 
   .chat-log {
@@ -757,12 +881,22 @@
     font-size: var(--step-0);
   }
 
-  .chat-about {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: .6875rem;
-    line-height: 1.4;
-    letter-spacing: .04em;
+  .end-talk {
+    font: inherit;
+    font-size: var(--step-0);
+    justify-self: start;
+    padding: .2rem .55rem;
     color: var(--ink-muted);
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .end-talk:hover, .end-talk:focus-visible {
+    color: var(--rejected);
+    border-color: var(--rejected);
+    outline: none;
   }
 
   .chat-options { display: flex; flex-wrap: wrap; gap: .3rem; }
@@ -772,7 +906,7 @@
     font-size: var(--step-0);
     padding: .2rem .6rem;
     color: var(--ink);
-    background: var(--surface);
+    background: var(--surface-sunk);
     border: 1px solid var(--line-strong);
     border-radius: 999px;
     cursor: pointer;
@@ -781,29 +915,46 @@
   .chat-options button:hover { border-color: var(--accent); color: var(--accent); }
 
   .msg {
-    padding: .3rem .5rem;
+    padding: .35rem .55rem;
     font-size: .8125rem;
     line-height: 1.45;
     border-radius: 9px;
     max-width: 85%;
   }
 
-  /* The side and the colour say who spoke; a label on every line is noise. */
   .msg .who { display: none; }
-
   .msg.you { justify-self: end; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
-  .msg.claude { justify-self: start; background: var(--surface); border: 1px solid var(--line); }
+  .msg.claude { justify-self: start; background: var(--surface-sunk); border: 1px solid var(--line); }
   .msg.pending { border-style: dashed; }
 
-  /* The subject is printed once per run of messages that share it. */
+  .msg.typing { display: flex; gap: .25rem; align-items: center; padding: .45rem .6rem; }
+
+  .msg.typing i {
+    width: .35rem;
+    height: .35rem;
+    border-radius: 50%;
+    background: var(--ink-muted);
+    opacity: .5;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .msg.typing i { animation: blink 1.2s ease-in-out infinite; }
+    .msg.typing i:nth-child(2) { animation-delay: .2s; }
+    .msg.typing i:nth-child(3) { animation-delay: .4s; }
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: .25; }
+    50% { opacity: 1; }
+  }
+
   .subject-line {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: .625rem;
-    letter-spacing: .06em;
+    font-size: .6875rem;
+    letter-spacing: .04em;
     color: var(--ink-muted);
     background: none;
     border: none;
-    padding: .15rem 0 0;
+    padding: .3rem 0 .1rem;
     cursor: pointer;
     justify-self: center;
     text-align: center;
@@ -811,26 +962,24 @@
 
   .subject-line:hover { color: var(--accent); }
 
-
-
-  .panel-close {
-    display: none;
-    position: sticky;
-    top: 0;
-    margin: -1.25rem -1.25rem .5rem auto;
-    padding: .5rem .9rem;
-    font: inherit;
+  /* The record sits above the conversation and never covers the graph. It
+     folds to a readable height; the rest is one click away. */
+  .record { border-top: 3px solid var(--aspect-color, var(--accent)); padding-top: .6rem; }
+  .record[hidden] { display: none; }
+  .record-pane:has(.record[hidden])::before {
+    content: "Pick a node to read its record here.";
     color: var(--ink-muted);
-    background: var(--surface);
-    border: none;
-    cursor: pointer;
+    font-size: var(--step-0);
   }
 
-  /* Phone layout: the graph keeps the screen, and the record slides over it. */
+  .record[hidden] { display: none; }
+
+  .record .refs button, .record .origin { max-width: 100%; }
+
+  /* Phone: the chat sits under the graph, the record covers it when opened. */
   @media (max-width: 52rem) {
-    header { gap: .6rem 1rem; padding: .6rem .9rem; }
+    header { gap: .5rem 1rem; padding: .6rem .9rem; }
     h1 { font-size: var(--step-1); }
-    .legend { display: none; }
     .source { display: none; }
 
     .aspect-bar {
@@ -846,34 +995,18 @@
     .aspect-bar .chip, .aspect-bar .mode-toggle, .aspect-bar .apply, .aspect-bar .reset { flex: none; }
     .aspect-bar .mode-toggle { margin-left: 0 !important; }
 
-    main { grid-template-columns: minmax(0, 1fr); }
-
-    /* The conversation stays at the bottom of the screen; the record of a node
-       slides up over the graph when one is chosen. */
-    .side {
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 5;
-      max-height: 78dvh;
-      border-left: none;
-      border-top: 1px solid var(--line-strong);
-      border-radius: 10px 10px 0 0;
-      box-shadow: var(--shadow);
-      grid-template-rows: auto auto;
+    main {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(8rem, 1fr) minmax(0, 1.2fr);
     }
 
-    .side { grid-template-rows: auto minmax(0, auto); }
-    .side .panel { max-height: 42dvh; padding: 1rem 1rem .5rem; display: none; }
-    body.panel-open .side .panel { display: block; }
-    .chat-log { max-height: 26dvh; }
-    body.panel-open .toolbar { display: none; }
+    .side { border-left: none; border-top: 1px solid var(--line-strong); padding: .6rem .8rem .8rem; }
 
-    .panel-close { display: block; }
+    .record { max-height: 38dvh; }
+    .record.folded { max-height: 9rem; }
 
-    .toolbar { bottom: .75rem; right: .75rem; }
-    .toolbar button { padding: .45rem .8rem; }
+    .toolbar { bottom: .5rem; right: .5rem; }
+    .toolbar button { padding: .4rem .7rem; }
 
     /* Touch has no hover, so the hide button on an aspect stays visible. */
     .hide-btn { opacity: 1; }
@@ -882,19 +1015,12 @@
     .qa-card { border-radius: 0; height: 100dvh; padding: 1.25rem 1rem; align-content: start; }
     .qa-card h2 { font-size: 1.25rem; }
     .qa-actions { position: sticky; bottom: 0; padding: .6rem 0; background: var(--surface); }
-    .qa-actions .ghost { padding: .45rem .8rem; }
 
     .code-window { padding: 0; }
     .code-card { height: 100dvh; border-radius: 0; }
     .code-body { font-size: .75rem; }
     .code-head { flex-wrap: wrap; }
-    .code-head button { padding: .35rem .7rem; }
-
-    .answer textarea { min-height: 3.5rem; }
-    .answer .option { padding: .35rem .8rem; }
   }
-
-
 
   .panel-kind {
     font-family: "IBM Plex Mono", monospace;
@@ -904,7 +1030,7 @@
     color: var(--ink-muted);
   }
 
-  .panel h2 {
+  .record h2 {
     margin: .35rem 0 .75rem;
     font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
     font-size: var(--step-3);
@@ -926,8 +1052,8 @@
   .status.decided { color: var(--decided); background: var(--decided-soft); }
   .status.rejected { color: var(--rejected); background: var(--rejected-soft); }
 
-  .panel dl { margin: 1.1rem 0 0; display: grid; gap: .85rem; }
-  .panel dt {
+  .record dl { margin: 1.1rem 0 0; display: grid; gap: .85rem; }
+  .record dt {
     font-family: "IBM Plex Mono", monospace;
     font-size: .6875rem;
     letter-spacing: .09em;
@@ -935,9 +1061,9 @@
     color: var(--ink-muted);
     margin-bottom: .15rem;
   }
-  .panel dd { margin: 0; max-width: 62ch; }
+  .record dd { margin: 0; max-width: 62ch; }
 
-  .panel .origin {
+  .record .origin {
     margin-top: 1.25rem;
     padding-top: .85rem;
     border-top: 1px solid var(--line);
@@ -1002,12 +1128,6 @@
   <h1 id="mapTitle"></h1>
   <span class="source" id="mapSource"></span>
   <div class="tally" id="tally"></div>
-  <div class="legend">
-    <span><i class="swatch aspect"></i>aspect — its own colour</span>
-    <span><i class="swatch question"></i>open question</span>
-    <span><i class="swatch decision"></i>decision</span>
-    <span><i class="swatch rejected"></i>rejected</span>
-  </div>
 </header>
 
 <nav class="aspect-bar" id="aspectBar" aria-label="Aspects on the map"></nav>
@@ -1016,27 +1136,39 @@
 
 <div class="code-window" id="codeWindow" hidden role="dialog" aria-modal="true" aria-label="Source fragment"></div>
 
-<main>
-  <div style="position: relative; min-height: 0;">
+<main id="main" data-layout="side" data-order="record-first">
+  <div class="stage">
     <svg id="canvas" role="application" aria-label="Design decision map"></svg>
     <div class="toast" id="toast" role="status" hidden></div>
     <div class="toolbar">
       <button type="button" id="fit">Fit</button>
-      <button type="button" id="clear">Clear selection</button>
+      <button type="button" id="clear">Clear</button>
     </div>
   </div>
-  <aside class="side">
-    <div class="panel" id="panel" aria-live="polite"></div>
-    <section class="chat" aria-label="Conversation with Claude">
+
+  <div class="split" id="splitMain" role="separator" aria-label="Resize the panels" tabindex="0"></div>
+
+  <div class="dock" id="dock">
+    <section class="pane record-pane" aria-label="Node record">
+      <div class="record" id="panel" aria-live="polite" hidden></div>
+    </section>
+
+    <div class="split" id="splitDock" role="separator" aria-label="Resize the record" tabindex="0"></div>
+
+    <section class="pane chat-pane" aria-label="Conversation with Claude">
+      <div class="chat-head">
+        <span class="presence" id="presence" title=""><i></i><b></b></span>
+        <span class="chat-subject" id="chatAbout"></span>
+      </div>
       <div class="chat-log" id="chatLog"></div>
-      <div class="chat-about" id="chatAbout"></div>
       <div class="chat-options" id="chatOptions"></div>
       <div class="compose">
-        <textarea id="chatField" rows="2" placeholder="Enter sends, Shift+Enter breaks the line"></textarea>
+        <textarea id="chatField" rows="2" placeholder="Enter sends · Shift+Enter for a new line"></textarea>
         <button type="button" id="chatSend">Send</button>
       </div>
+      <button type="button" class="end-talk" id="chatEnd">End the conversation</button>
     </section>
-  </aside>
+  </div>
 </main>
 
 <script>
@@ -1236,7 +1368,7 @@ let edgeShapes = [];
 let nodeShapes = new Map();
 let selected = null;
 let waiting = null;
-let listening = false;
+let presence = "offline";
 const settled = new Map();
 const unread = new Set();
 
@@ -1443,10 +1575,37 @@ function renderAspectBar() {
     bar.append(chip);
   }
 
+  const controls = document.createElement("span");
+  controls.className = "layout-controls";
+  controls.style.marginLeft = "auto";
+
+  const flip = document.createElement("button");
+  flip.type = "button";
+  flip.title = "Put the panels beside the graph, or under it";
+  flip.textContent = main.dataset.layout === "side" ? "▤ side" : "▥ bottom";
+  flip.addEventListener("click", () => {
+    main.dataset.layout = main.dataset.layout === "side" ? "bottom" : "side";
+    saveLayout();
+    renderAspectBar();
+    fit();
+  });
+
+  const swap = document.createElement("button");
+  swap.type = "button";
+  swap.title = "Swap the record and the conversation";
+  swap.textContent = "⇄";
+  swap.addEventListener("click", () => {
+    main.dataset.order = main.dataset.order === "chat-first" ? "record-first" : "chat-first";
+    saveLayout();
+    fit();
+  });
+
+  controls.append(flip, swap);
+  bar.append(controls);
+
   const qa = document.createElement("button");
   qa.type = "button";
   qa.className = "mode-toggle";
-  qa.style.marginLeft = "auto";
   qa.textContent = "One question at a time";
   qa.addEventListener("click", () => openQA());
   bar.append(qa);
@@ -1492,7 +1651,8 @@ function select(id) {
 
   renderPanel(byId.get(id), [...lit].filter(other => other !== id));
   renderChatSubject();
-  document.body.classList.add("panel-open");
+  panel.hidden = false;
+  panel.style.setProperty("--aspect-color", aspectColour.get(aspectOwners().get(id)) || "var(--accent)");
   unread.delete(id);
   if (nodeShapes.has(id)) nodeShapes.get(id).classList.remove("unread");
   bringIntoView(byId.get(id));
@@ -1502,7 +1662,7 @@ function select(id) {
 function clearSelection() {
   selected = null;
   renderChatSubject();
-  document.body.classList.remove("panel-open");
+  panel.hidden = true;
   svg.classList.remove("has-selection");
   for (const group of nodeShapes.values()) group.classList.remove("lit", "selected");
   for (const { path } of edgeShapes) path.classList.remove("lit");
@@ -1552,8 +1712,9 @@ function renderPanel(node, neighbours) {
 
   const close = document.createElement("button");
   close.type = "button";
-  close.className = "panel-close";
-  close.textContent = "Close ✕";
+  close.className = "record-close";
+  close.textContent = "✕";
+  close.title = "Close the record";
   close.addEventListener("click", clearSelection);
   panel.append(close);
 
@@ -1659,25 +1820,73 @@ function renderChat() {
     log.append(line);
   }
 
+  renderTyping();
   if (atEnd) requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
   renderChatSubject();
 }
 
-/** The line above the field, and the shortcuts a question offers. */
+/**
+ * A bubble at the end of the log while Claude is working: an answer is coming,
+ * and the log says so where the answer will appear.
+ */
+function renderTyping() {
+  const log = document.getElementById("chatLog");
+  const existing = log.querySelector(".typing");
+  const show = presence === "working";
+
+  if (!show) {
+    if (existing) existing.remove();
+    return;
+  }
+
+  if (existing) {
+    log.append(existing);
+    return;
+  }
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg claude typing";
+  bubble.innerHTML = "<i></i><i></i><i></i>";
+  log.append(bubble);
+  log.scrollTop = log.scrollHeight;
+}
+
+const PRESENCE_WORDS = {
+  waiting: ["waiting", "Claude is waiting for your next message"],
+  working: ["working", "Claude is on the map, doing something else right now"],
+  offline: ["away", "Nobody is on the map; a message will wait"]
+};
+
+/** The dot and the word: what Claude is doing, in one glance. */
+function renderPresence() {
+  const box = document.getElementById("presence");
+  const state = waiting ? "waiting" : presence;
+  const [word, hint] = PRESENCE_WORDS[state] || PRESENCE_WORDS.offline;
+
+  box.dataset.state = state;
+  box.title = waiting && waiting.note ? `${hint} — ${waiting.note}` : hint;
+  box.querySelector("b").textContent = word;
+}
+
+/** The subject line and the shortcuts a question offers. */
 function renderChatSubject() {
   const about = document.getElementById("chatAbout");
   const options = document.getElementById("chatOptions");
   const node = selected ? byId.get(selected) : null;
 
-  const subject = node ? node.title : "the map";
-  const state = waiting && node && waiting.node === node.id
-    ? "Claude ждёт ответа"
-    : listening ? "Claude слушает" : "Claude сейчас не слушает — сообщение подождёт";
+  about.textContent = "";
+  if (node) {
+    const label = document.createElement("button");
+    label.type = "button";
+    label.textContent = node.title;
+    label.title = "Show this node";
+    label.addEventListener("click", () => select(node.id));
+    about.append(document.createTextNode("about "), label);
+  } else {
+    about.textContent = "about the map — pick a node to change the subject";
+  }
 
-  about.textContent = `${state} · тема: ${subject}`;
-  about.style.color = waiting && node && waiting.node === node.id
-    ? "var(--open)"
-    : listening ? "var(--decided)" : "var(--ink-muted)";
+  renderPresence();
 
   options.textContent = "";
   for (const option of (node && node.options) || []) {
@@ -2197,34 +2406,53 @@ if (location.protocol === "http:" || location.protocol === "https:") {
       const news = await fetch("/api/updates").then(response => response.json());
 
       if (news.build && BUILD !== "dev" && news.build !== BUILD) {
-        toast("Карта обновилась — перезагружаю страницу");
+        toast("The map changed — reloading");
         setTimeout(() => location.reload(), 1200);
         return;
       }
 
       // Match by id, not by count: the page keeps its own history and the
       // server starts a fresh one, so counting made a new reply look old.
-      // Match by id, and fall back to time plus text for anything saved before
-      // ids existed — otherwise the same reply is added a second time.
+      // The server holds the conversation both sides can see; take whatever is
+      // not here yet, matching by id and falling back to time plus text for
+      // lines saved before ids existed.
       const key = message => message.id || `${message.at}|${message.text}`;
-      const replies = news.replies || [];
       const known = new Set(pending.chat.flatMap(message =>
         [message.id, `${message.at}|${message.text}`].filter(Boolean)));
-      const fresh = replies.filter(reply => !known.has(key(reply)) && !known.has(`${reply.at}|${reply.text}`));
+      const fresh = (news.chat || []).filter(message => !known.has(key(message)));
 
       if (fresh.length) {
-        for (const reply of fresh) {
-          pending.chat.push({ id: reply.id, role: "claude", text: reply.text, about: reply.about, at: reply.at });
+        for (const message of fresh) {
+          // Our own line comes back with an id it did not have when it was
+          // written here; adopt the id instead of adding the line twice.
+          const mine = message.role === "you" && pending.chat.find(local =>
+            !local.id && local.role === "you" && local.text === message.text && local.about === message.about);
+
+          if (mine) {
+            mine.id = message.id;
+            mine.at = message.at;
+            continue;
+          }
+
+          pending.chat.push({
+            id: message.id, role: message.role, text: message.text,
+            about: message.about, at: message.at, applied: message.role === "you" ? undefined : true
+          });
         }
 
+        pending.chat.sort((a, b) => String(a.at).localeCompare(String(b.at)));
         savePending();
         renderChat();
+
         const last = fresh[fresh.length - 1];
-        if (last.about && byId.has(last.about) && selected !== last.about) select(last.about);
+        if (last.role === "claude" && last.about && byId.has(last.about) && selected !== last.about) {
+          select(last.about);
+        }
       }
 
-      listening = Boolean(news.listening);
-      renderChatSubject();
+      presence = news.presence || "offline";
+      renderPresence();
+      renderTyping();
 
       for (const [id, mark] of Object.entries(news.resolved || {})) {
         if (settled.has(id)) continue;
@@ -2248,6 +2476,79 @@ if (location.protocol === "http:" || location.protocol === "https:") {
   }, 1500);
 }
 
+// Layout: where the dock sits, which pane comes first, and how big each is.
+// All of it is per-viewer taste, so it lives in this browser and nowhere else.
+const LAYOUT_KEY = "map-layout";
+const main = document.getElementById("main");
+
+function loadLayout() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}");
+    if (saved.layout) main.dataset.layout = saved.layout;
+    if (saved.order) main.dataset.order = saved.order;
+    if (saved.dock) main.style.setProperty("--dock", saved.dock);
+    if (saved.record) main.style.setProperty("--record", saved.record);
+  } catch (error) {
+    // Nothing saved, or storage is unavailable: the defaults stand.
+  }
+}
+
+function saveLayout() {
+  try {
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify({
+      layout: main.dataset.layout,
+      order: main.dataset.order,
+      dock: main.style.getPropertyValue("--dock").trim() || undefined,
+      record: main.style.getPropertyValue("--record").trim() || undefined
+    }));
+  } catch (error) {
+    // A layout that is not remembered still works.
+  }
+}
+
+/**
+ * Drags one handle. `variable` is the size it changes; which screen axis that
+ * is depends on the orientation, so it is read at the start of each drag.
+ */
+function draggable(handle, variable, invert) {
+  const axis = () => {
+    const vertical = main.dataset.layout === "side" ? variable === "--record" : variable === "--dock";
+    return vertical ? "y" : "x";
+  };
+
+  handle.addEventListener("pointerdown", event => {
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    const box = main.getBoundingClientRect();
+    const startSize = parseFloat(getComputedStyle(main).getPropertyValue(variable));
+    const start = axis() === "x" ? event.clientX : event.clientY;
+    const flip = invert() ? -1 : 1;
+
+    const move = moveEvent => {
+      const now = axis() === "x" ? moveEvent.clientX : moveEvent.clientY;
+      const limit = axis() === "x" ? box.width : box.height;
+      const next = Math.min(Math.max(startSize + (start - now) * flip, 160), limit - 160);
+      main.style.setProperty(variable, `${Math.round(next)}px`);
+      applyTransform();
+    };
+
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      saveLayout();
+      fit();
+    };
+
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+  });
+}
+
+draggable(document.getElementById("splitMain"), "--dock", () => false);
+draggable(document.getElementById("splitDock"), "--record", () => main.dataset.order === "chat-first");
+
+loadLayout();
+
 const chatField = document.getElementById("chatField");
 chatField.addEventListener("keydown", event => {
   if (event.key !== "Enter" || event.shiftKey) return;
@@ -2256,6 +2557,16 @@ chatField.addEventListener("keydown", event => {
   if (!text) return;
   chatField.value = "";
   say(text);
+});
+
+document.getElementById("chatEnd").addEventListener("click", () => {
+  const text = "Разговор закончен.";
+  say(text);
+  if (window.mapBridge) fetch("/api/end", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map: MAP.title, about: selected, text })
+  }).catch(() => {});
+  toast("Claude was told the conversation is over");
 });
 
 document.getElementById("chatSend").addEventListener("click", () => {
