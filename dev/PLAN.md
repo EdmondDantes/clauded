@@ -49,11 +49,19 @@ collects questions onto a map and does nothing until Edmond presses Apply.
       done: pressing Apply reaches a session that is not blocked in a tool call
       tier: T2
 
+## S5 — One conversation  [done]
+
+- [x] S5.1 Replace the per-node threads with one log
+      done: a line carries the node it is about; the reply and the settled mark came back through the page's endpoint
+      handoff: Claude hears the page only while ask_on_map or wait_for_message is running
+- [x] S5.2 Claude sets the subject as well
+      done: select_on_map points at a node without waiting
+
 ## S4 — The mode in the skill
 
 - [x] S4.1 Architecture map vocabulary against a real project
       done: dev/design/architecture.map.yaml renders 15 nodes and 13 edges, every kind placed
       handoff: the page had no columns or markers for module, knowledge and dependency until now
-- [ ] S4.2 Install the plugin once and use it from a session
-      done: /map runs from the installed plugin and its MCP tools answer
-      tier: T1
+- [x] S4.2 Install the plugin once and use it from a session
+      done: installed from the marketplace, its tools answered, a question was asked and answered on the map
+      handoff: a github source clones a second time without credentials — a relative source of "./" avoids it
