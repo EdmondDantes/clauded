@@ -470,6 +470,20 @@
   .node.settled .plate { stroke: var(--decided); stroke-dasharray: none; stroke-width: 2; }
   .node.settled .mark { fill: var(--decided); stroke: var(--decided); }
 
+  /* A thread Claude has written to, which is not the one on screen. */
+  .node.unread .plate { stroke: var(--accent); stroke-width: 2.5; }
+  .node.unread .kind { fill: var(--accent); }
+  .node.unread .plate + .mark { filter: none; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .node.unread .plate { animation: pulse 1.6s ease-in-out infinite; }
+  }
+
+  @keyframes pulse {
+    0%, 100% { stroke-opacity: 1; }
+    50% { stroke-opacity: .35; }
+  }
+
   .settled {
     font-size: var(--step-0);
     color: var(--decided);
@@ -1119,6 +1133,7 @@ let nodeShapes = new Map();
 let selected = null;
 let waiting = null;
 const settled = new Map();
+const unread = new Set();
 
 // One thread per node: what the reader said and what Claude replied. Messages
 // wait here until Apply hands them over, and survive a reload through
@@ -1382,6 +1397,8 @@ function select(id) {
 
   renderPanel(byId.get(id), [...lit].filter(other => other !== id));
   document.body.classList.add("panel-open");
+  unread.delete(id);
+  if (nodeShapes.has(id)) nodeShapes.get(id).classList.remove("unread");
   bringIntoView(byId.get(id));
   window.mapBridge?.select(id);
 }
@@ -1577,12 +1594,15 @@ function answerBlock(node) {
     }
 
     box.append(thread);
+    // The newest message is the one being read; a long thread otherwise opens
+    // at its beginning.
+    requestAnimationFrame(() => { thread.scrollTop = thread.scrollHeight; });
   }
 
   const compose = document.createElement("div");
   compose.className = "compose";
   const field = document.createElement("textarea");
-  field.rows = 1;
+  field.rows = 2;
   field.placeholder = node.kind === "question"
     ? "Answer, or ask — Enter sends, Shift+Enter breaks the line"
     : "Ask about this node — Enter sends";
@@ -1634,6 +1654,7 @@ function renderNodeStates() {
   for (const [id, group] of nodeShapes) {
     group.classList.toggle("answered", answerOf(id) !== null);
     group.classList.toggle("settled", settled.has(id));
+    group.classList.toggle("unread", unread.has(id));
   }
 }
 
@@ -2049,16 +2070,35 @@ if (location.protocol === "http:" || location.protocol === "https:") {
     try {
       const news = await fetch("/api/updates").then(response => response.json());
 
+      const answered = [];
       for (const [id, replies] of Object.entries(news.replies || {})) {
         const messages = threadOf(id);
         const known = messages.filter(message => message.role === "claude").length;
         for (const reply of replies.slice(known)) {
           messages.push({ role: "claude", text: reply.text, at: reply.at });
         }
-        if (replies.length > known) {
-          savePending();
-          if (selected === id || (!document.getElementById("qa").hidden)) refreshBlock(byId.get(id));
+        if (replies.length > known) answered.push(id);
+      }
+
+      if (answered.length) {
+        savePending();
+        // A reply lands in whichever thread Claude wrote to, which is often not
+        // the one on screen: the node is marked and named, so the answer is not
+        // waiting somewhere unseen.
+        for (const id of answered) {
+          if (id === selected) continue;
+          unread.add(id);
+          if (nodeShapes.has(id)) nodeShapes.get(id).classList.add("unread");
         }
+
+        if (!selected) select(answered[0]);
+        else if (answered.includes(selected)) refreshBlock(byId.get(selected));
+        else {
+          const node = byId.get(answered[0]);
+          toast(`Claude ответил: ${node ? node.title : answered[0]}`);
+        }
+
+        if (!document.getElementById("qa").hidden) renderQA();
       }
 
       for (const [id, mark] of Object.entries(news.resolved || {})) {
