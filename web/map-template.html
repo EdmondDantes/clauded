@@ -761,11 +761,8 @@
     font-family: "IBM Plex Mono", monospace;
     font-size: .6875rem;
     line-height: 1.4;
-    letter-spacing: .06em;
+    letter-spacing: .04em;
     color: var(--ink-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .chat-options { display: flex; flex-wrap: wrap; gap: .3rem; }
@@ -2216,9 +2213,13 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 
       // Match by id, not by count: the page keeps its own history and the
       // server starts a fresh one, so counting made a new reply look old.
+      // Match by id, and fall back to time plus text for anything saved before
+      // ids existed — otherwise the same reply is added a second time.
+      const key = message => message.id || `${message.at}|${message.text}`;
       const replies = news.replies || [];
-      const known = new Set(pending.chat.map(message => message.id).filter(Boolean));
-      const fresh = replies.filter(reply => !reply.id || !known.has(reply.id));
+      const known = new Set(pending.chat.flatMap(message =>
+        [message.id, `${message.at}|${message.text}`].filter(Boolean)));
+      const fresh = replies.filter(reply => !known.has(key(reply)) && !known.has(`${reply.at}|${reply.text}`));
 
       if (fresh.length) {
         for (const reply of fresh) {
