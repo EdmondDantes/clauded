@@ -4,11 +4,13 @@
 Speaks JSON-RPC over stdin and stdout, one message per line, and runs the local
 map server in the same process. Four tools:
 
-    open_map        render a map and hand back its address
-    read_state      what is selected, and every thread as it stands
-    ask_on_map      point at one question and wait for the next thing said there
-    reply_on_map    answer in a node's thread, the way a chat reply lands
-    wait_for_apply  wait until Apply hands the whole draft over
+    open_map          render a map and hand back its address
+    read_state        what is selected, and every thread as it stands
+    ask_on_map        point at one question and wait for the next thing said there
+    wait_for_message  wait for anything said anywhere on the map — the chat loop
+    reply_on_map      answer in a node's thread, the way a chat reply lands
+    resolve_on_map    mark a question settled and move on
+    wait_for_apply    wait until Apply hands the whole draft over
 
 The waiting tools block, which is the point: work does not start while a
 question is open. A blocking call is bounded by the `timeout` in .mcp.json, so
@@ -70,6 +72,28 @@ TOOLS = [
                 "text": {"type": "string", "description": "The reply, as the reader will see it"},
             },
             "required": ["node", "text"],
+        },
+    },
+    {
+        "name": "wait_for_message",
+        "description": "Wait for the next message the reader writes anywhere on the map, and return it with its node. Call it again after replying to keep the conversation going.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "timeout_seconds": {"type": "number", "description": "How long to wait; default 1500"},
+            },
+        },
+    },
+    {
+        "name": "resolve_on_map",
+        "description": "Mark a question settled on the map: the node shows as answered and the reader can move on. Say what the answer was.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "node": {"type": "string", "description": "Node id of the question"},
+                "answer": {"type": "string", "description": "The settled answer, one line, as it will appear on the map"},
+            },
+            "required": ["node", "answer"],
         },
     },
     {
@@ -172,6 +196,43 @@ def tool_ask_on_map(session, args):
     return json.dumps({"node": node, "said": [message["text"] for message in fresh]}, ensure_ascii=False)
 
 
+def tool_wait_for_message(session, args):
+    state, url = session.ensure()
+    timeout = float(args.get("timeout_seconds", 1500))
+
+    def counted(snapshot):
+        return sum(len([m for m in messages if m["role"] == "you"])
+                   for messages in snapshot["threads"].values())
+
+    seen = counted(state.snapshot())
+
+    def fresh(snapshot):
+        if counted(snapshot) <= seen:
+            return None
+        latest = None
+        for node, messages in snapshot["threads"].items():
+            for message in messages:
+                if message["role"] != "you":
+                    continue
+                if latest is None or message["at"] >= latest[1]["at"]:
+                    latest = (node, message)
+        return latest
+
+    found = state.wait_for(fresh, timeout)
+    if found is None:
+        return f"Nothing said on the map within {timeout:.0f}s. It is still open at {url}."
+
+    node, message = found
+    return json.dumps({"node": node, "text": message["text"], "at": message["at"]}, ensure_ascii=False)
+
+
+def tool_resolve_on_map(session, args):
+    state, _ = session.ensure()
+    state.add_message(args["node"], "claude", f"Settled: {args['answer']}")
+    state.resolve(args["node"], args["answer"])
+    return f"{args['node']} is marked settled: {args['answer']}"
+
+
 def tool_reply_on_map(session, args):
     state, _ = session.ensure()
     state.add_message(args["node"], "claude", args["text"])
@@ -197,7 +258,9 @@ HANDLERS = {
     "open_map": tool_open_map,
     "read_state": tool_read_state,
     "ask_on_map": tool_ask_on_map,
+    "wait_for_message": tool_wait_for_message,
     "reply_on_map": tool_reply_on_map,
+    "resolve_on_map": tool_resolve_on_map,
     "wait_for_apply": tool_wait_for_apply,
 }
 

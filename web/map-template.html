@@ -467,6 +467,18 @@
   }
 
   .node.answered .plate { stroke: var(--decided); stroke-dasharray: 5 3; }
+  .node.settled .plate { stroke: var(--decided); stroke-dasharray: none; stroke-width: 2; }
+  .node.settled .mark { fill: var(--decided); stroke: var(--decided); }
+
+  .settled {
+    font-size: var(--step-0);
+    color: var(--decided);
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+  }
+
+  .settled::before { content: "✓"; font-weight: 600; }
 
   .toast {
     position: absolute;
@@ -1106,6 +1118,7 @@ let edgeShapes = [];
 let nodeShapes = new Map();
 let selected = null;
 let waiting = null;
+const settled = new Map();
 
 // One thread per node: what the reader said and what Claude replied. Messages
 // wait here until Apply hands them over, and survive a reload through
@@ -1517,6 +1530,14 @@ function answerBlock(node) {
 
   const messages = threadOf(node.id);
   const waitingHere = waiting && waiting.node === node.id;
+  const settledHere = settled.get(node.id);
+
+  if (settledHere) {
+    const mark = document.createElement("div");
+    mark.className = "settled";
+    mark.textContent = `Settled: ${settledHere.note}`;
+    box.append(mark);
+  }
 
   if (waitingHere) {
     const mark = document.createElement("div");
@@ -1561,13 +1582,15 @@ function answerBlock(node) {
   const compose = document.createElement("div");
   compose.className = "compose";
   const field = document.createElement("textarea");
-  field.placeholder = node.kind === "question" ? "Answer, or ask about this question" : "Ask about this node";
+  field.rows = 1;
+  field.placeholder = node.kind === "question"
+    ? "Answer, or ask — Enter sends, Shift+Enter breaks the line"
+    : "Ask about this node — Enter sends";
   field.addEventListener("keydown", event => {
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault();
-      const text = field.value.trim();
-      if (text) say(node, text);
-    }
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    const text = field.value.trim();
+    if (text) say(node, text);
   });
 
   const send = document.createElement("button");
@@ -1608,7 +1631,10 @@ function commitPending() {
 
 /** Marks the nodes that already carry an answer. */
 function renderNodeStates() {
-  for (const [id, group] of nodeShapes) group.classList.toggle("answered", answerOf(id) !== null);
+  for (const [id, group] of nodeShapes) {
+    group.classList.toggle("answered", answerOf(id) !== null);
+    group.classList.toggle("settled", settled.has(id));
+  }
 }
 
 function updateApply() {
@@ -1760,7 +1786,8 @@ function closeCode() {
 let qaIndex = 0;
 
 function openQuestions() {
-  return visibleNodes(hidden).filter(node => node.kind === "question" && node.status === "open");
+  return visibleNodes(hidden)
+    .filter(node => node.kind === "question" && node.status === "open" && !settled.has(node.id));
 }
 
 function openQA(index = 0) {
@@ -2032,6 +2059,13 @@ if (location.protocol === "http:" || location.protocol === "https:") {
           savePending();
           if (selected === id || (!document.getElementById("qa").hidden)) refreshBlock(byId.get(id));
         }
+      }
+
+      for (const [id, mark] of Object.entries(news.resolved || {})) {
+        if (settled.has(id)) continue;
+        settled.set(id, mark);
+        if (nodeShapes.has(id)) nodeShapes.get(id).classList.add("settled");
+        if (selected === id || !document.getElementById("qa").hidden) refreshBlock(byId.get(id));
       }
 
       waiting = news.focus || null;

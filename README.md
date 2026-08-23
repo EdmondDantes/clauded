@@ -74,12 +74,18 @@ in the chat:
 | `open_map` | render a map and hand back its address |
 | `read_state` | the selected node and every thread as it stands |
 | `ask_on_map` | point at one question and block until something is said there |
+| `wait_for_message` | block until anything is written anywhere on the map |
 | `reply_on_map` | write a reply into a node's thread |
+| `resolve_on_map` | mark a question settled, so the map shows it closed |
 | `wait_for_apply` | block until Apply hands the whole draft over |
 
-`ask_on_map` blocks on purpose: while a question is open, no work starts. The
-page picks the pointer up within a second and a half, opens that question and
-says who is waiting.
+`ask_on_map` and `wait_for_message` block on purpose: while a question is open,
+no work starts. The page picks the pointer up within a second and a half, opens
+that question and says who is waiting.
+
+Claude hears the page only while one of those calls is running. Between them the
+page has nobody to talk to, and what is written waits until the next call — so
+the loop is wait, reply, wait again.
 
 ## Layout
 

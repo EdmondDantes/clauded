@@ -69,6 +69,7 @@ class State:
         self.version = 0
         self.selection = None
         self.threads = {}
+        self.resolved = {}
         self.applied = None
         self.focus = None
 
@@ -78,6 +79,7 @@ class State:
                 "version": self.version,
                 "selection": self.selection,
                 "threads": {node: list(messages) for node, messages in self.threads.items()},
+                "resolved": dict(self.resolved),
                 "applied": self.applied,
                 "focus": self.focus,
             }
@@ -120,6 +122,17 @@ class State:
 
         self._persist()
         return message
+
+    def resolve(self, node, note):
+        """Marks a question settled, so the page stops asking for it."""
+        with self.lock:
+            self.resolved[node] = {"note": note, "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            if self.focus and self.focus.get("node") == node:
+                self.focus = None
+            self.version += 1
+            self.lock.notify_all()
+
+        self._persist()
 
     def replies_for_page(self):
         """Claude's side of every thread, which is what the page does not have."""
@@ -175,7 +188,12 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/updates":
             state = self.server.state
-            self.json_reply(200, {"focus": state.snapshot()["focus"], "replies": state.replies_for_page()})
+            snapshot = state.snapshot()
+            self.json_reply(200, {
+                "focus": snapshot["focus"],
+                "resolved": snapshot["resolved"],
+                "replies": state.replies_for_page(),
+            })
             return
 
         if not path.startswith("/map/"):
