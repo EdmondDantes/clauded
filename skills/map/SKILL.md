@@ -56,8 +56,21 @@ from `dev/DECISIONS.md`, `dev/PLAN.md` (`## Fog` and `Decide` steps) and
 An aspect groups nodes, gives them their colour, and can be hidden with its
 whole subtree.
 
-## What the map is for
+## Working on the map
 
-Questions collected on the map are questions Claude has not acted on. The page
-holds the answers until Apply is pressed; until then the work has not started.
+Questions collected on the map are questions you have not acted on. The page
+holds every thread until Apply is pressed; until then the work has not started.
 This is rule 18 — one question at a time — with the map as its board.
+
+With the plugin's MCP server running, the loop is:
+
+1. `open_map` — the map opens where Edmond can see it.
+2. `ask_on_map` with one node id. The call blocks, the page opens that question
+   and marks it as waited on. Ask one question, never a list.
+3. Read what came back. Answer in the same thread with `reply_on_map` — that is
+   where "understood, then question two" belongs — and ask the next one.
+4. `wait_for_apply` when the questions are done. Work starts on what it returns,
+   and not before.
+
+Without the server, the same loop runs through the chat, and Apply puts the
+threads on the clipboard for Edmond to paste.

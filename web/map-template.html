@@ -362,7 +362,7 @@
     padding-top: .9rem;
     border-top: 1px solid var(--line);
     display: grid;
-    gap: .5rem;
+    gap: .55rem;
   }
 
   .answer .options { display: flex; flex-wrap: wrap; gap: .35rem; }
@@ -370,7 +370,7 @@
   .answer .option {
     font: inherit;
     font-size: var(--step-0);
-    padding: .2rem .6rem;
+    padding: .25rem .7rem;
     color: var(--ink);
     background: var(--surface-sunk);
     border: 1px solid var(--line-strong);
@@ -379,72 +379,89 @@
     text-align: left;
   }
 
-  .answer .option[aria-pressed="true"] {
-    color: var(--decided);
-    border-color: var(--decided);
-    background: var(--decided-soft);
-  }
-
+  .answer .option:hover { border-color: var(--accent); color: var(--accent); }
   .answer .option:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-  .answer textarea {
+  .thread { display: grid; gap: .4rem; max-height: 18rem; overflow-y: auto; }
+
+  .thread .msg {
+    display: grid;
+    gap: .15rem;
+    padding: .4rem .6rem;
+    font-size: var(--step-0);
+    border-radius: 8px;
+    max-width: 92%;
+  }
+
+  .thread .msg .who {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: .625rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  .thread .msg.you {
+    justify-self: end;
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+
+  .thread .msg.claude {
+    justify-self: start;
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+  }
+
+  .thread .msg.pending { opacity: .75; border-style: dashed; }
+
+  .compose { display: flex; gap: .4rem; align-items: flex-end; }
+
+  .compose textarea {
     font: inherit;
     font-size: var(--step-0);
-    width: 100%;
-    min-height: 4.5rem;
+    flex: 1;
+    min-height: 2.6rem;
+    max-height: 8rem;
     padding: .45rem .55rem;
     color: var(--ink);
     background: var(--surface-sunk);
     border: 1px solid var(--line-strong);
-    border-radius: 4px;
+    border-radius: 6px;
     resize: vertical;
   }
 
-  .answer textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .compose textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-  .answer .send {
+  .compose button {
     font: inherit;
     font-size: var(--step-0);
-    justify-self: start;
-    padding: .3rem .85rem;
+    padding: .5rem .9rem;
     color: var(--surface);
     background: var(--accent);
     border: 1px solid var(--accent);
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
   }
 
-  .answer .send:hover { filter: brightness(1.08); }
-  .answer .send:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .compose button:hover { filter: brightness(1.08); }
+  .compose button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
-  .answer .saved, .answer .queued div {
-    display: flex;
-    align-items: flex-start;
-    gap: .5rem;
-    padding: .35rem .5rem;
+  .waiting {
     font-size: var(--step-0);
-    background: var(--surface-sunk);
-    border: 1px solid var(--line);
-    border-left: 2px solid var(--decided);
-    border-radius: 3px;
+    color: var(--open);
+    display: flex;
+    align-items: center;
+    gap: .4rem;
   }
 
-  .answer .queued { display: grid; gap: .3rem; }
-  .answer .queued div { border-left-color: var(--open); }
-
-  .answer .saved span, .answer .queued span { flex: 1; }
-
-  .answer .saved button, .answer .queued button {
-    font: inherit;
-    padding: 0 .2rem;
-    color: var(--ink-muted);
-    background: none;
-    border: none;
-    cursor: pointer;
-    line-height: 1.2;
+  .waiting::before {
+    content: "";
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background: var(--open);
   }
-
-  .answer .saved button:hover, .answer .queued button:hover { color: var(--rejected); }
 
   .node.answered .plate { stroke: var(--decided); stroke-dasharray: 5 3; }
 
@@ -1059,18 +1076,24 @@ let bounds = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
 let edgeShapes = [];
 let nodeShapes = new Map();
 let selected = null;
+let waiting = null;
 
-// What the reader has entered but not yet handed over. Answers are keyed by
-// node id; asks are free questions addressed to Claude. Both survive a reload
-// through localStorage and leave the page only when Apply is pressed.
-const pending = { answers: new Map(), asks: [] };
-const STORE_KEY = "map-pending";
+// One thread per node: what the reader said and what Claude replied. Messages
+// wait here until Apply hands them over, and survive a reload through
+// localStorage; with the plugin server running they also travel as they are
+// written, which is what lets Claude wait for one answer.
+const pending = { threads: new Map() };
+const STORE_KEY = "map-threads";
+
+function threadOf(id) {
+  if (!pending.threads.has(id)) pending.threads.set(id, []);
+  return pending.threads.get(id);
+}
 
 function loadPending() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
-    for (const [id, value] of Object.entries(raw.answers || {})) pending.answers.set(id, value);
-    pending.asks.push(...(raw.asks || []));
+    for (const [id, messages] of Object.entries(raw)) pending.threads.set(id, messages);
   } catch (error) {
     // No storage, or a stale value: the page works without either.
   }
@@ -1078,17 +1101,26 @@ function loadPending() {
 
 function savePending() {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({
-      answers: Object.fromEntries(pending.answers),
-      asks: pending.asks
-    }));
+    localStorage.setItem(STORE_KEY, JSON.stringify(Object.fromEntries(pending.threads)));
   } catch (error) {
-    // Storage can be unavailable; losing the draft is better than a broken page.
+    // Storage can be unavailable; losing the draft beats a broken page.
   }
 }
 
+/** Messages the reader has written and not yet applied. */
 function pendingCount() {
-  return pending.answers.size + pending.asks.length;
+  let count = 0;
+  for (const messages of pending.threads.values()) {
+    count += messages.filter(message => message.role === "you" && !message.applied).length;
+  }
+
+  return count;
+}
+
+/** The reader's last word on a node — what an answer amounts to. */
+function answerOf(id) {
+  const mine = threadOf(id).filter(message => message.role === "you");
+  return mine.length ? mine[mine.length - 1].text : null;
 }
 
 /** The button that drops an aspect and its subtree out of the view. */
@@ -1445,126 +1477,89 @@ function renderPanel(node, neighbours) {
 }
 
 /**
- * Answering and asking, for any node. A question offers its options and a free
- * field; every node takes a question addressed to Claude. Both need a press to
- * count: what is typed and not sent stays typed, and the queue below the field
- * shows exactly what Apply will hand over.
+ * One conversation per node. The options are shortcuts that send themselves;
+ * everything else — an answer, a question back, a correction — goes through the
+ * same field, and Claude's replies land in the same thread.
  */
 function answerBlock(node) {
   const box = document.createElement("div");
   box.className = "answer";
 
-  if (node.kind === "question") {
-    const label = document.createElement("span");
-    label.className = "panel-kind";
-    label.textContent = "Your answer";
-    box.append(label);
+  const messages = threadOf(node.id);
+  const waitingHere = waiting && waiting.node === node.id;
 
-    if (node.options && node.options.length) {
-      const options = document.createElement("div");
-      options.className = "options";
-      for (const option of node.options) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "option";
-        button.textContent = option;
-        button.setAttribute("aria-pressed", String(pending.answers.get(node.id) === option));
-        button.addEventListener("click", () => {
-          if (pending.answers.get(node.id) === option) pending.answers.delete(node.id);
-          else pending.answers.set(node.id, option);
-          commitPending();
-          refreshBlock(node);
-        });
-        options.append(button);
-      }
-
-      box.append(options);
-    }
-
-    const current = pending.answers.get(node.id);
-    if (current) {
-      const saved = document.createElement("div");
-      saved.className = "saved";
-      const text = document.createElement("span");
-      text.textContent = current;
-      const drop = document.createElement("button");
-      drop.type = "button";
-      drop.textContent = "✕";
-      drop.title = "Remove this answer";
-      drop.addEventListener("click", () => {
-        pending.answers.delete(node.id);
-        commitPending();
-        refreshBlock(node);
-      });
-      saved.append(text, drop);
-      box.append(saved);
-    }
-
-    const field = document.createElement("textarea");
-    field.placeholder = "Answer in your own words";
-    const send = document.createElement("button");
-    send.type = "button";
-    send.className = "send";
-    send.textContent = "Save answer";
-    send.addEventListener("click", () => {
-      const value = field.value.trim();
-      if (!value) return;
-      pending.answers.set(node.id, value);
-      field.value = "";
-      commitPending();
-      refreshBlock(node);
-      toast("Answer saved — press Apply to hand it over");
-    });
-    box.append(field, send);
+  if (waitingHere) {
+    const mark = document.createElement("div");
+    mark.className = "waiting";
+    mark.textContent = waiting.note || "Claude is waiting for your answer";
+    box.append(mark);
   }
 
-  const askLabel = document.createElement("span");
-  askLabel.className = "panel-kind";
-  askLabel.textContent = "Ask Claude";
-  box.append(askLabel);
-
-  const mine = pending.asks.filter(ask => ask.about === node.id);
-  if (mine.length) {
-    const queued = document.createElement("div");
-    queued.className = "queued";
-    for (const ask of mine) {
-      const row = document.createElement("div");
-      const text = document.createElement("span");
-      text.textContent = ask.text;
-      const drop = document.createElement("button");
-      drop.type = "button";
-      drop.textContent = "✕";
-      drop.title = "Remove this question";
-      drop.addEventListener("click", () => {
-        pending.asks.splice(pending.asks.indexOf(ask), 1);
-        commitPending();
-        refreshBlock(node);
-      });
-      row.append(text, drop);
-      queued.append(row);
+  if (node.kind === "question" && node.options && node.options.length) {
+    const options = document.createElement("div");
+    options.className = "options";
+    for (const option of node.options) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "option";
+      button.textContent = option;
+      button.addEventListener("click", () => say(node, option));
+      options.append(button);
     }
 
-    box.append(queued);
+    box.append(options);
   }
 
-  const ask = document.createElement("textarea");
-  ask.placeholder = node.kind === "question" ? "Ask about this question" : "Why is this here?";
-  const post = document.createElement("button");
-  post.type = "button";
-  post.className = "send";
-  post.textContent = "Add question";
-  post.addEventListener("click", () => {
-    const text = ask.value.trim();
-    if (!text) return;
-    pending.asks.push({ about: node.id, title: node.title, text });
-    ask.value = "";
-    commitPending();
-    refreshBlock(node);
-    toast("Question queued — press Apply to send it");
+  if (messages.length) {
+    const thread = document.createElement("div");
+    thread.className = "thread";
+    for (const message of messages) {
+      const line = document.createElement("div");
+      line.className = "msg " + message.role + (message.role === "you" && !message.applied ? " pending" : "");
+      const who = document.createElement("span");
+      who.className = "who";
+      who.textContent = message.role === "you" ? "you" : "claude";
+      const text = document.createElement("span");
+      text.textContent = message.text;
+      line.append(who, text);
+      thread.append(line);
+    }
+
+    box.append(thread);
+  }
+
+  const compose = document.createElement("div");
+  compose.className = "compose";
+  const field = document.createElement("textarea");
+  field.placeholder = node.kind === "question" ? "Answer, or ask about this question" : "Ask about this node";
+  field.addEventListener("keydown", event => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      const text = field.value.trim();
+      if (text) say(node, text);
+    }
   });
-  box.append(ask, post);
 
+  const send = document.createElement("button");
+  send.type = "button";
+  send.textContent = "Send";
+  send.addEventListener("click", () => {
+    const text = field.value.trim();
+    if (text) say(node, text);
+  });
+
+  compose.append(field, send);
+  box.append(compose);
   return box;
+}
+
+/** Adds one message from the reader and lets the server know, if it is there. */
+function say(node, text) {
+  const message = { role: "you", text, at: new Date().toISOString() };
+  threadOf(node.id).push(message);
+  commitPending();
+  refreshBlock(node);
+  window.mapBridge?.message(node.id, text);
 }
 
 /** Redraws whichever view is showing this node, so the queue stays current. */
@@ -1583,7 +1578,7 @@ function commitPending() {
 
 /** Marks the nodes that already carry an answer. */
 function renderNodeStates() {
-  for (const [id, group] of nodeShapes) group.classList.toggle("answered", pending.answers.has(id));
+  for (const [id, group] of nodeShapes) group.classList.toggle("answered", answerOf(id) !== null);
 }
 
 function updateApply() {
@@ -1602,23 +1597,19 @@ function updateApply() {
 async function applyPending() {
   if (pendingCount() === 0) return;
 
-  const lines = [`# ${MAP.title} — answers`];
-  for (const [id, answer] of pending.answers) {
-    lines.push(`- ${id} · ${byId.get(id).title} → ${answer}`);
-  }
+  const lines = [`# ${MAP.title}`];
+  const threads = {};
 
-  if (pending.asks.length) {
-    lines.push("", "# Questions for Claude");
-    for (const ask of pending.asks) lines.push(`- about ${ask.about} · ${ask.title}: ${ask.text}`);
+  for (const [id, messages] of pending.threads) {
+    if (!messages.some(message => message.role === "you" && !message.applied)) continue;
+    const node = byId.get(id);
+    lines.push("", `## ${node ? node.title : id} (${id})`);
+    for (const message of messages) lines.push(`- ${message.role}: ${message.text}`);
+    threads[id] = messages.map(message => ({ role: message.role, text: message.text }));
   }
 
   const summary = lines.join("\n");
-  const payload = {
-    map: MAP.title,
-    answers: Object.fromEntries(pending.answers),
-    asks: pending.asks,
-    summary
-  };
+  const payload = { map: MAP.title, threads, answers: answersOfAll(threads), summary };
 
   if (window.mapBridge && typeof window.mapBridge.apply === "function") {
     await window.mapBridge.apply(payload);
@@ -1628,15 +1619,28 @@ async function applyPending() {
       await navigator.clipboard.writeText(summary);
       toast("Copied — paste it into the conversation");
     } catch (error) {
-      toast("Copy failed; the summary is in the panel");
+      toast("Copy failed; the text is in the console");
       console.log(summary);
     }
   }
 
-  pending.answers.clear();
-  pending.asks.length = 0;
+  for (const messages of pending.threads.values()) {
+    for (const message of messages) message.applied = true;
+  }
+
   commitPending();
   if (selected) select(selected);
+}
+
+/** The reader's last word per node, next to the full threads. */
+function answersOfAll(threads) {
+  const answers = {};
+  for (const [id, messages] of Object.entries(threads)) {
+    const mine = messages.filter(message => message.role === "you");
+    if (mine.length) answers[id] = mine[mine.length - 1].text;
+  }
+
+  return answers;
 }
 
 let toastTimer = null;
@@ -1777,7 +1781,7 @@ function renderQA() {
   dots.className = "qa-dots";
   questions.forEach((question, index) => {
     const dot = document.createElement("i");
-    if (pending.answers.has(question.id)) dot.classList.add("done");
+    if (answerOf(question.id) !== null) dot.classList.add("done");
     if (index === qaIndex) dot.classList.add("here");
     dots.append(dot);
   });
@@ -1962,8 +1966,42 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 
   window.mapBridge = {
     apply: payload => post("/api/apply", payload),
-    select: id => post("/api/selection", { map: MAP.title, node: id }).catch(() => {})
+    select: id => post("/api/selection", { map: MAP.title, node: id }).catch(() => {}),
+    message: (id, text) => post("/api/message", { map: MAP.title, node: id, text }).catch(() => {})
   };
+
+  // Claude points at one question and replies in its thread; the page asks for
+  // both on a timer, opens the question it is asked about, and shows the reply.
+  let asked = null;
+  setInterval(async () => {
+    try {
+      const news = await fetch("/api/updates").then(response => response.json());
+
+      for (const [id, replies] of Object.entries(news.replies || {})) {
+        const messages = threadOf(id);
+        const known = messages.filter(message => message.role === "claude").length;
+        for (const reply of replies.slice(known)) {
+          messages.push({ role: "claude", text: reply.text, at: reply.at });
+        }
+        if (replies.length > known) {
+          savePending();
+          if (selected === id || (!document.getElementById("qa").hidden)) refreshBlock(byId.get(id));
+        }
+      }
+
+      waiting = news.focus || null;
+      const node = waiting && waiting.node;
+      if (node === asked) return;
+      asked = node;
+      if (!node || !byId.has(node)) return;
+      hidden.clear();
+      render();
+      select(node);
+      toast(waiting.note || "Claude is waiting for this answer");
+    } catch (error) {
+      // The server went away; the page keeps working on its own.
+    }
+  }, 1500);
 }
 
 loadPending();

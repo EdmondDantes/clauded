@@ -6,5 +6,6 @@
   "author": {
     "name": "Edmond"
   },
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
 }

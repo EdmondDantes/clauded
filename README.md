@@ -40,18 +40,36 @@ missing — all four look on the page like a record that exists.
 - **Walk it.** Click a node to read the full record; its neighbours stay lit and
   everything else dims. Aspects carry their own colour and can be dropped from
   the view and brought back from the strip at the top.
-- **Answer on it.** A question offers its options and a free field. Any node
-  takes a question addressed to Claude — "why is this here?".
+- **Talk on it.** Every node has one thread. The options are shortcuts that send
+  themselves; anything else — an answer, a question back, a correction — goes
+  through the same field, and Claude's replies land in the same thread.
 - **One question at a time.** Press `q` for the walkthrough: one card, one
   question, progress across the top.
 - **Read the code.** A node can cite files; the fragment is copied into the page
   as it is rendered and opens in a window, coloured when the server rendered it.
 - **Apply.** Nothing leaves the page until Apply is pressed. Without the plugin
-  running, Apply copies the answers as text for you to paste into the
+  running, Apply copies the threads as text for you to paste into the
   conversation; with it, they go straight to the session.
 
 Answers survive a reload through the browser's own storage and never travel
 anywhere on their own.
+
+## With Claude
+
+The plugin carries an MCP server, so a session can work on the map instead of
+in the chat:
+
+| tool | what it does |
+|---|---|
+| `open_map` | render a map and hand back its address |
+| `read_state` | the selected node and every thread as it stands |
+| `ask_on_map` | point at one question and block until something is said there |
+| `reply_on_map` | write a reply into a node's thread |
+| `wait_for_apply` | block until Apply hands the whole draft over |
+
+`ask_on_map` blocks on purpose: while a question is open, no work starts. The
+page picks the pointer up within a second and a half, opens that question and
+says who is waiting.
 
 ## Layout
 
@@ -59,7 +77,9 @@ anywhere on their own.
 web/map-template.html    the page: renderer, panel, walkthrough, code window
 tools/mapkit.py          read, validate, inline cited code, colour, render
 tools/build-map.py       one map to one HTML file, for publishing
-server/serve.py          localhost server: renders on request, takes answers back
+server/maps.py           the server itself: renders, holds the threads, waits
+server/serve.py          run the server on its own, without Claude
+server/mcp.py            the MCP side: ask, reply, wait
 skills/map/              the slash command that opens a map
 dev/design/clauded.map.yaml   this project's own design map
 ```

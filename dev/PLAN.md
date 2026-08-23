@@ -32,22 +32,21 @@ collects questions onto a map and does nothing until Edmond presses Apply.
 - [x] S2.2 Take the page's state back
       done: POST /api/selection and /api/apply write .clauded/selection.json and pending.json
 
-## S3 — The MCP side
+## S3 — The MCP side  [in progress]
 
-- [ ] S3.1 Decide blocking call, channel, or both
-      done: choice and reason recorded in dev/DECISIONS.md
-      tier: T2
-- [ ] S3.2 MCP server over stdio, standard library only
-      done: tools/list and tools/call answer over stdio; the server starts from .mcp.json
-      tier: T2
-- [ ] S3.3 Read the selection from the session
-      done: a tool returns the node Edmond has selected in the open page
-      tier: T2
-- [ ] S3.4 Ask one question on the map and wait
-      done: a tool highlights one question and returns the answer given on the page
-      tier: T2
-- [ ] S3.5 Apply reaches the session without the clipboard
-      done: pressing Apply lands in the conversation with no copy and paste
+- [x] S3.1 Decide blocking call, channel, or both
+      done: the blocking call carries the work; a channel stays open as a later addition
+      handoff: a channel needs --channels and an Anthropic allowlist, the blocking call needs neither
+- [x] S3.2 MCP server over stdio, standard library only
+      done: initialize, tools/list and tools/call answered over stdio in one run
+- [x] S3.3 Read the selection and the threads from the session
+      done: read_state returns the selection and every thread
+- [x] S3.4 Ask one question on the map and wait
+      done: ask_on_map blocked until a message arrived and returned it; the page saw the pointer
+- [x] S3.5 Apply reaches the session without the clipboard
+      done: wait_for_apply returned the applied draft
+- [ ] S3.6 The channel: Apply wakes the session without a waiting call
+      done: pressing Apply reaches a session that is not blocked in a tool call
       tier: T2
 
 ## S4 — The mode in the skill
