@@ -1071,6 +1071,11 @@ const MAP = {
 
 // Both vocabularies a map may speak: design on the left, architecture on the
 // right. A kind decides the label, the shape of its marker and its column.
+// Stamped when the page is rendered. The server reports the build it is serving
+// now; a tab left open across an update reloads itself instead of talking a
+// dialect the server no longer speaks.
+const BUILD = "dev";
+
 const KIND_LABEL = {
   aspect: "aspect",
   question: "open question",
@@ -2196,6 +2201,12 @@ if (location.protocol === "http:" || location.protocol === "https:") {
   setInterval(async () => {
     try {
       const news = await fetch("/api/updates").then(response => response.json());
+
+      if (news.build && BUILD !== "dev" && news.build !== BUILD) {
+        toast("Карта обновилась — перезагружаю страницу");
+        setTimeout(() => location.reload(), 1200);
+        return;
+      }
 
       const replies = news.replies || [];
       const known = pending.chat.filter(message => message.role === "claude").length;

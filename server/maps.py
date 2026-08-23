@@ -196,6 +196,7 @@ class Handler(BaseHTTPRequestHandler):
             state = self.server.state
             snapshot = state.snapshot()
             self.json_reply(200, {
+                "build": mapkit.build_stamp(),
                 "focus": snapshot["focus"],
                 "resolved": snapshot["resolved"],
                 "replies": state.replies_for_page(),

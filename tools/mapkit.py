@@ -170,9 +170,17 @@ def collect_fragments(data, root, coloured=False):
     return problems
 
 
+def build_stamp(template=None):
+    """Identifies the page code being served: its file's modification time."""
+    path = Path(template or TEMPLATE)
+    return str(int(path.stat().st_mtime))
+
+
 def render(data, template=None):
-    """Substitutes the MAP literal and the page title into the template."""
-    text = Path(template or TEMPLATE).read_text(encoding="utf-8")
+    """Substitutes the MAP literal, the title and the build stamp into the template."""
+    path = Path(template or TEMPLATE)
+    text = path.read_text(encoding="utf-8")
+    text = text.replace('const BUILD = "dev";', f'const BUILD = "{build_stamp(path)}";', 1)
     literal = "const MAP = " + json.dumps(data, ensure_ascii=False, indent=2) + ";"
     page, count = re.subn(r"const MAP = \{.*?\n\};", lambda _: literal, text, count=1, flags=re.S)
     if count != 1:
