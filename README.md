@@ -84,9 +84,10 @@ in the chat:
 no work starts. The page picks the pointer up within a second and a half, opens
 that question and says who is waiting.
 
-Claude hears the page only while one of those calls is running. Between them the
-page has nobody to talk to, and what is written waits until the next call — so
-the loop is wait, reply, wait again.
+A blocking call is not how the conversation stays alive: typing in the terminal
+interrupts the turn and the call with it. The plugin's Stop hook does that job —
+before a turn ends it drains the map's inbox and blocks the stop, so Claude
+answers whatever was written, whether or not it was waiting.
 
 ## Layout
 

@@ -1,11 +1,12 @@
 {
   "name": "clauded",
   "displayName": "Clauded — design maps",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Interactive design and architecture maps built from a project's own records",
   "author": {
     "name": "Edmond"
   },
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json"
 }

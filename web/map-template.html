@@ -781,38 +781,35 @@
   .chat-options button:hover { border-color: var(--accent); color: var(--accent); }
 
   .msg {
-    display: grid;
-    gap: .1rem;
-    padding: .4rem .6rem;
-    font-size: var(--step-0);
-    border-radius: 8px;
-    max-width: 92%;
+    padding: .3rem .5rem;
+    font-size: .8125rem;
+    line-height: 1.45;
+    border-radius: 9px;
+    max-width: 85%;
   }
 
-  .msg .who {
+  /* The side and the colour say who spoke; a label on every line is noise. */
+  .msg .who { display: none; }
+
+  .msg.you { justify-self: end; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+  .msg.claude { justify-self: start; background: var(--surface); border: 1px solid var(--line); }
+  .msg.pending { border-style: dashed; }
+
+  /* The subject is printed once per run of messages that share it. */
+  .subject-line {
     font-family: "IBM Plex Mono", monospace;
     font-size: .625rem;
-    letter-spacing: .09em;
-    text-transform: uppercase;
+    letter-spacing: .06em;
     color: var(--ink-muted);
-  }
-
-  .msg .subject {
-    font-size: .6875rem;
-    color: var(--accent);
     background: none;
     border: none;
-    padding: 0;
+    padding: .15rem 0 0;
     cursor: pointer;
-    justify-self: start;
-    text-align: left;
+    justify-self: center;
+    text-align: center;
   }
 
-  .msg .subject:hover { text-decoration: underline; }
-
-  .msg.you { justify-self: end; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
-  .msg.claude { justify-self: start; background: var(--surface); border: 1px solid var(--line); }
-  .msg.pending { opacity: .75; border-style: dashed; }
+  .subject-line:hover { color: var(--accent); }
 
 
 
@@ -1643,28 +1640,22 @@ function renderChat() {
   const atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
   log.textContent = "";
 
+  let lastSubject = null;
   for (const message of pending.chat) {
-    const line = document.createElement("div");
-    line.className = "msg " + message.role + (message.role === "you" && !message.applied ? " pending" : "");
-
-    const who = document.createElement("span");
-    who.className = "who";
-    who.textContent = message.role === "you" ? "you" : "claude";
-    line.append(who);
-
-    const text = document.createElement("span");
-    text.textContent = message.text;
-    line.append(text);
-
-    if (message.about && byId.has(message.about)) {
+    if (message.about !== lastSubject && message.about && byId.has(message.about)) {
       const subject = document.createElement("button");
       subject.type = "button";
-      subject.className = "subject";
-      subject.textContent = "→ " + byId.get(message.about).title;
+      subject.className = "subject-line";
+      subject.textContent = "— " + byId.get(message.about).title + " —";
       subject.addEventListener("click", () => select(message.about));
-      line.append(subject);
+      log.append(subject);
     }
 
+    lastSubject = message.about;
+
+    const line = document.createElement("div");
+    line.className = "msg " + message.role + (message.role === "you" && !message.applied ? " pending" : "");
+    line.textContent = message.text;
     log.append(line);
   }
 

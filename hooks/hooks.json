@@ -1,0 +1,17 @@
+{
+  "description": "Deliver what was written on the map before the turn ends",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/map-inbox.py"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

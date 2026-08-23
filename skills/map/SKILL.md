@@ -71,10 +71,10 @@ With the plugin's MCP server running, the loop is:
    the node id you pass is its subject. When
    the question is settled, `resolve_on_map` marks it on the map so Edmond can
    see it is closed, then ask the next one.
-4. `wait_for_message` between questions: it waits for anything Edmond writes
-   anywhere on the map. Call it again after every reply — while nothing is
-   waiting, the page has nobody to talk to and a message written then is only
-   seen the next time you wait.
+4. You do not have to wait for the map: the plugin's Stop hook drains it before
+   your turn ends and hands you what was written, so answer it and carry on.
+   `wait_for_message` is for holding a turn open deliberately — it dies when
+   Edmond types in the terminal, because that interrupts the turn.
 5. `wait_for_apply` when the questions are done. Work starts on what it returns,
    and not before.
 

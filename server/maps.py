@@ -73,6 +73,9 @@ class State:
         self.applied = None
         self.focus = None
         self.listeners = 0
+        # How many of the reader's messages have already been handed to Claude,
+        # so the same line is not delivered twice.
+        self.delivered = 0
         # Every message gets an id unique across restarts, so a page that
         # remembers more than the server does can still tell what is new.
         self.origin = str(int(time.time()))
@@ -183,6 +186,18 @@ class State:
 
         self._persist()
 
+    def inbox(self):
+        """The reader's messages Claude has not been given yet, and marks them given."""
+        with self.lock:
+            mine = [m for m in self.chat if m["role"] == "you"]
+            fresh = mine[self.delivered:]
+            self.delivered = len(mine)
+
+        if fresh:
+            self._persist()
+
+        return fresh
+
     def replies_for_page(self):
         """Claude's side of the conversation, which is what the page does not have."""
         return [message for message in self.snapshot()["chat"] if message["role"] == "claude"]
@@ -229,6 +244,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if path in ("/", "/index.html"):
             self.reply(200, index_page(root, maps_in(root)))
+            return
+
+        if path == "/api/inbox":
+            self.json_reply(200, {"messages": self.server.state.inbox()})
             return
 
         if path == "/api/updates":
@@ -327,4 +346,14 @@ def start(root=".", port=8791):
 
     thread = threading.Thread(target=server.serve_forever, name="clauded-http", daemon=True)
     thread.start()
-    return server, state, f"http://127.0.0.1:{port}"
+
+    url = f"http://127.0.0.1:{port}"
+    # The Stop hook runs in its own process and needs to find this server; the
+    # home directory is the one place both sides agree on.
+    home = Path.home() / STATE_DIR
+    home.mkdir(exist_ok=True)
+    (home / "server.json").write_text(
+        json.dumps({"url": url, "root": str(Path(root).resolve())}), encoding="utf-8"
+    )
+
+    return server, state, url

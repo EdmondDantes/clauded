@@ -45,8 +45,11 @@ collects questions onto a map and does nothing until Edmond presses Apply.
       done: ask_on_map blocked until a message arrived and returned it; the page saw the pointer
 - [x] S3.5 Apply reaches the session without the clipboard
       done: wait_for_apply returned the applied draft
-- [ ] S3.6 The channel: Apply wakes the session without a waiting call
-      done: pressing Apply reaches a session that is not blocked in a tool call
+- [x] S3.6 Reach the session without a waiting call
+      done: a Stop hook drains the map's inbox and blocks the stop; checked — silent when empty, delivers once, silent again
+      handoff: a blocking call dies on any terminal input, which is why waiting alone never worked
+- [ ] S3.7 The channel, for a session that is idle rather than working
+      done: a message on the map wakes a session that is not in a turn at all
       tier: T2
 
 ## S5 — One conversation  [done]
