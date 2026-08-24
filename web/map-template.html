@@ -3,7 +3,7 @@
 <title>Map</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 
 <style>
   :root {
@@ -18,19 +18,28 @@
     --accent-soft: #dbe2f4;
     --open: #9a6410;
     --open-soft: #f6e8cf;
-    --decided: #16705a;
-    --decided-soft: #d6ebe4;
+    --decided: #14724a;
+    --decided-soft: #d5eadd;
     --rejected: #8c4a4a;
     --rejected-soft: #f0dcdc;
-    --aspect-1: #3450a8;
-    --aspect-2: #12665f;
-    --aspect-3: #7a3f83;
+    /* An aspect says which part of the design a node belongs to; a status says
+       where the question stands. The two palettes are kept in different hue
+       families — violet, cyan and magenta against blue, amber, green and red —
+       because an aspect drawn in a status hue is read as that status. */
+    --aspect-1: #6a3fa0;
+    --aspect-2: #0b6e8f;
+    --aspect-3: #a8386b;
     --shadow: 0 1px 2px rgba(21, 24, 29, .07), 0 8px 24px rgba(21, 24, 29, .06);
 
+    --step-micro: .6875rem;
     --step-0: .8125rem;
     --step-1: .9375rem;
     --step-2: 1.0625rem;
     --step-3: 1.375rem;
+
+    /* One gutter for every plate. The stage kept 20px and the dock 16px, and
+       the two met at the splitter, where the difference was visible. */
+    --gutter: 1rem;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -46,13 +55,13 @@
       --accent-soft: #22304d;
       --open: #d7a445;
       --open-soft: #362b16;
-      --decided: #55c2a0;
-      --decided-soft: #14322a;
+      --decided: #4fc08c;
+      --decided-soft: #123227;
       --rejected: #cb8888;
       --rejected-soft: #37211f;
-      --aspect-1: #8ba7f2;
-      --aspect-2: #4fb8ae;
-      --aspect-3: #c48fd2;
+      --aspect-1: #b79bf0;
+      --aspect-2: #56b9d8;
+      --aspect-3: #e58ab4;
       --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px rgba(0, 0, 0, .35);
     }
   }
@@ -69,13 +78,13 @@
     --accent-soft: #22304d;
     --open: #d7a445;
     --open-soft: #362b16;
-    --decided: #55c2a0;
-    --decided-soft: #14322a;
+    --decided: #4fc08c;
+    --decided-soft: #123227;
     --rejected: #cb8888;
     --rejected-soft: #37211f;
-    --aspect-1: #8ba7f2;
-    --aspect-2: #4fb8ae;
-    --aspect-3: #c48fd2;
+    --aspect-1: #b79bf0;
+    --aspect-2: #56b9d8;
+    --aspect-3: #e58ab4;
     --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px rgba(0, 0, 0, .35);
   }
 
@@ -117,14 +126,13 @@
     align-items: baseline;
     gap: 1.25rem;
     flex-wrap: wrap;
-    padding: .75rem 1.25rem;
+    padding: .75rem var(--gutter);
     border-bottom: 1px solid var(--line);
     background: var(--surface);
   }
 
   h1 {
     margin: 0;
-    font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
     font-size: var(--step-2);
     font-weight: 600;
     letter-spacing: .01em;
@@ -238,6 +246,9 @@
 
   .stage {
     display: grid;
+    /* The single column is capped: an auto track takes the width of its widest
+       child, and the header and the strip then reach past a phone's screen. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr);
     min-width: 0;
     min-height: 0;
@@ -248,6 +259,7 @@
 
   .dock {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     min-width: 0;
     min-height: 0;
@@ -293,7 +305,7 @@
   /* With the conversation folded away there is nothing to leave room for. */
   main[data-fold="chat"] .record-pane { max-height: none; }
 
-  .pane-body { overflow-y: auto; min-height: 0; align-content: start; padding: .8rem 1.25rem; }
+  .pane-body { overflow-y: auto; min-height: 0; align-content: start; padding: .8rem var(--gutter); }
 
   .chat-pane {
     grid-template-rows: auto minmax(0, 1fr) auto auto;
@@ -302,7 +314,7 @@
     min-height: 0;
   }
 
-  .chat-pane .chat-log, .chat-pane .chat-options, .chat-pane .compose { margin: 0 1rem; }
+  .chat-pane .chat-log, .chat-pane .chat-options, .chat-pane .compose { margin: 0 var(--gutter); }
   .chat-pane .chat-log { margin-top: .25rem; }
 
   /* The top of the dock: who is on the other end, and where the panels sit. */
@@ -311,7 +323,7 @@
     display: flex;
     align-items: center;
     gap: .5rem;
-    padding: .45rem .6rem .45rem 1rem;
+    padding: .45rem .6rem .45rem var(--gutter);
     border-bottom: 1px solid var(--line);
     background: var(--surface-sunk);
   }
@@ -348,15 +360,7 @@
 
   .layout-card[hidden] { display: none; }
 
-  .layout-card .card-label {
-    display: block;
-    margin-bottom: .55rem;
-    font-family: "IBM Plex Mono", monospace;
-    font-size: .625rem;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    color: var(--ink-muted);
-  }
+  .layout-card .card-label { display: block; margin-bottom: .55rem; }
 
   .layout-card .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
 
@@ -400,19 +404,12 @@
     display: flex;
     align-items: center;
     gap: .5rem;
-    padding: .4rem .6rem .4rem 1rem;
+    padding: .4rem .6rem .4rem var(--gutter);
     border-bottom: 1px solid var(--line);
     min-width: 0;
   }
 
-  .pane-name {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: .6875rem;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    color: var(--ink-muted);
-    flex: none;
-  }
+  .pane-name { flex: none; }
 
   .fold {
     margin-left: auto;
@@ -429,15 +426,52 @@
   .fold:hover { color: var(--accent); border-color: var(--line-strong); }
   .fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-  /* The handle between panels: drag to resize. */
-  .split { background: var(--line); touch-action: none; }
+  /* The handle between panels: drag to resize. A bar filled with one colour is
+     the shape of a scrollbar, so the handle draws a hairline seam with a short
+     grip across its middle instead. The four lengths below carry the axis, so
+     the seam and the grip need no rules of their own per arrangement. */
+  .split {
+    position: relative;
+    background: transparent;
+    touch-action: none;
+    --seam-w: 100%;
+    --seam-h: 1px;
+    --grip-w: 1.75rem;
+    --grip-h: 3px;
+  }
 
-  main[data-layout="side"] > .split { width: 5px; cursor: col-resize; }
-  main[data-layout="bottom"] > .split { height: 5px; cursor: row-resize; }
-  main[data-flow="stack"] .dock-body > .split { height: 5px; width: auto; cursor: row-resize; }
-  main[data-flow="row"] .dock-body > .split { width: 5px; height: auto; cursor: col-resize; }
+  .split::before, .split::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+  }
 
-  .split:hover, .split:focus-visible { background: var(--accent); outline: none; }
+  .split::before { width: var(--seam-w); height: var(--seam-h); background: var(--line); }
+
+  .split::after {
+    width: var(--grip-w);
+    height: var(--grip-h);
+    border-radius: 999px;
+    background: var(--line-strong);
+  }
+
+  main[data-layout="side"] > .split,
+  main[data-flow="row"] .dock-body > .split {
+    width: 9px;
+    height: auto;
+    cursor: col-resize;
+    --seam-w: 1px;
+    --seam-h: 100%;
+    --grip-w: 3px;
+    --grip-h: 1.75rem;
+  }
+
+  main[data-layout="bottom"] > .split,
+  main[data-flow="stack"] .dock-body > .split { height: 9px; width: auto; cursor: row-resize; }
+
+  .split:hover::after, .split:focus-visible::after { background: var(--accent); }
+  .split:focus-visible { outline: none; }
 
 
 
@@ -511,21 +545,31 @@
 
   .aspect-bar {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     gap: .5rem;
-    padding: .5rem 1.25rem;
+    padding: .5rem var(--gutter);
     border-bottom: 1px solid var(--line);
     background: var(--surface-sunk);
   }
 
-  .aspect-bar .bar-label {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: .6875rem;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    color: var(--ink-muted);
-    margin-right: .25rem;
+  /* What is on the map on the left, what to do next on the right, with a rule
+     between them: filters and commands answer different questions. */
+  .bar-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+    min-width: 0;
+  }
+
+  .bar-actions {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex: none;
+    margin-left: auto;
+    padding-left: .75rem;
+    border-left: 1px solid var(--line-strong);
   }
 
   .chip {
@@ -551,9 +595,17 @@
 
   .chip .count {
     font-family: "IBM Plex Mono", monospace;
-    font-size: .6875rem;
+    font-size: var(--step-micro);
     color: var(--ink-muted);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Questions still open on this aspect, in the colour the map gives them. */
+  .chip .pip {
+    width: .45rem;
+    height: .45rem;
+    border-radius: 50%;
+    background: var(--open);
   }
 
   .chip[aria-pressed="false"] {
@@ -570,7 +622,6 @@
   .aspect-bar .reset {
     font: inherit;
     font-size: var(--step-0);
-    margin-left: auto;
     padding: .15rem .5rem;
     color: var(--ink-muted);
     background: none;
@@ -621,14 +672,6 @@
     font-size: var(--step-0);
     border-radius: 8px;
     max-width: 92%;
-  }
-
-  .thread .msg .who {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: .625rem;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    color: var(--ink-muted);
   }
 
   .thread .msg.you {
@@ -701,7 +744,9 @@
   .node.answered .state { fill: var(--open); }
   .node.settled .state { fill: var(--decided); }
   .node.unread .state { fill: var(--accent); }
-  .node.fresh .state { fill: var(--aspect-3); }
+  /* An arrival is transient and every hue on the page already means something,
+     so a new node takes the ink colour and gives it up when the glow ends. */
+  .node.fresh .state { fill: var(--ink); }
 
   .node.settled .mark { fill: var(--decided); stroke: var(--decided); }
 
@@ -741,10 +786,12 @@
 
   .settled::before { content: "✓"; font-weight: 600; }
 
+  /* The toolbar holds the bottom right corner of the graph, and on a narrow
+     stage a centred toast reached it. The toast takes the top instead. */
   .toast {
     position: absolute;
     left: 50%;
-    bottom: 1rem;
+    top: .75rem;
     transform: translateX(-50%);
     padding: .35rem .8rem;
     font-size: var(--step-0);
@@ -813,7 +860,7 @@
     padding: .8rem 0;
     overflow: auto;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: .8125rem;
+    font-size: var(--step-0);
     line-height: 1.55;
     tab-size: 4;
   }
@@ -880,6 +927,7 @@
   }
 
   .mode-toggle:hover, .mode-toggle:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+  .narrow-label { display: none; }
   /* Chrome draws its own ring around a focused SVG group, on a click as well
      as on Tab; the keyboard ring below replaces it. */
   .node:focus { outline: none; }
@@ -927,12 +975,22 @@
   }
 
   .chat-subject {
+    display: flex;
+    align-items: baseline;
+    gap: .3rem;
+    min-width: 0;
     font-size: var(--step-0);
     color: var(--ink-muted);
+  }
+
+  .chat-subject > * {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .chat-subject .lead { flex: none; }
 
   .chat-subject button {
     font: inherit;
@@ -992,7 +1050,7 @@
 
   .msg {
     padding: .35rem .55rem;
-    font-size: .8125rem;
+    font-size: var(--step-0);
     line-height: 1.45;
     border-radius: 9px;
     max-width: 85%;
@@ -1026,7 +1084,7 @@
   }
 
   .subject-line {
-    font-size: .6875rem;
+    font-size: var(--step-micro);
     letter-spacing: .04em;
     color: var(--ink-muted);
     background: none;
@@ -1066,7 +1124,16 @@
     }
 
     main[data-layout] .stage { order: 1; }
-    main[data-layout] > .split { order: 2; height: 5px; width: auto; cursor: row-resize; }
+    main[data-layout] > .split {
+      order: 2;
+      height: 9px;
+      width: auto;
+      cursor: row-resize;
+      --seam-w: 100%;
+      --seam-h: 1px;
+      --grip-w: 1.75rem;
+      --grip-h: 3px;
+    }
     main[data-layout] .dock { order: 3; border-left: none; border-top: 1px solid var(--line); }
 
     main[data-layout] .dock-body,
@@ -1090,27 +1157,43 @@
       grid-template-rows: minmax(0, 1fr) 0 auto;
     }
 
-    main[data-layout] .dock-body > .split { height: 5px; width: auto; cursor: row-resize; }
+    main[data-layout] .dock-body > .split {
+      height: 9px;
+      width: auto;
+      cursor: row-resize;
+      --seam-w: 100%;
+      --seam-h: 1px;
+      --grip-w: 1.75rem;
+      --grip-h: 3px;
+    }
     .record-pane { max-height: 40dvh; }
   }
 
   @media (max-width: 52rem) {
-    header { gap: .5rem 1rem; padding: .6rem .9rem; }
+    :root { --gutter: .9rem; }
+
+    header { gap: .5rem 1rem; padding: .6rem var(--gutter); }
     h1 { font-size: var(--step-1); }
     .source { display: none; }
 
     .aspect-bar {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      scrollbar-width: none;
-      padding: .45rem .9rem;
+      padding: .45rem var(--gutter);
       gap: .4rem;
     }
 
-    .aspect-bar::-webkit-scrollbar { display: none; }
-    .aspect-bar .bar-label { display: none; }
+    /* The chips scroll sideways; the commands stay put, so the strip keeps one
+       row on a phone without hiding what the row is for. */
+    .bar-filters {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .bar-filters::-webkit-scrollbar { display: none; }
+    .bar-actions { padding-left: .5rem; gap: .4rem; }
+    .wide-label { display: none; }
+    .narrow-label { display: inline; }
     .aspect-bar .chip, .aspect-bar .mode-toggle, .aspect-bar .apply, .aspect-bar .reset { flex: none; }
-    .aspect-bar .mode-toggle { margin-left: 0 !important; }
 
     main {
       grid-template-columns: minmax(0, 1fr);
@@ -1130,13 +1213,15 @@
 
     .code-window { padding: 0; }
     .code-card { height: 100dvh; border-radius: 0; }
-    .code-body { font-size: .75rem; }
+    .code-body { font-size: var(--step-micro); }
     .code-head { flex-wrap: wrap; }
   }
 
-  .panel-kind {
+  /* One register for the mono caps that name a surface or a field. A label
+     that needs another size is a label in the wrong place. */
+  .panel-kind, .pane-name, .layout-card .card-label, .record dt, .thread .msg .who {
     font-family: "IBM Plex Mono", monospace;
-    font-size: var(--step-0);
+    font-size: var(--step-micro);
     letter-spacing: .09em;
     text-transform: uppercase;
     color: var(--ink-muted);
@@ -1144,11 +1229,31 @@
 
   .record h2 {
     margin: .35rem 0 .75rem;
-    font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
     font-size: var(--step-3);
     font-weight: 600;
     line-height: 1.25;
     text-wrap: balance;
+  }
+
+  .record-meta { display: flex; align-items: center; gap: .5rem; }
+
+  .record-close {
+    font: inherit;
+    font-size: var(--step-0);
+    line-height: 1;
+    margin-left: auto;
+    padding: .15rem .35rem;
+    color: var(--ink-muted);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .record-close:hover, .record-close:focus-visible {
+    color: var(--rejected);
+    border-color: var(--line-strong);
+    outline: none;
   }
 
   .status {
@@ -1165,14 +1270,7 @@
   .status.rejected { color: var(--rejected); background: var(--rejected-soft); }
 
   .record dl { margin: 1.1rem 0 0; display: grid; gap: .85rem; }
-  .record dt {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: .6875rem;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    color: var(--ink-muted);
-    margin-bottom: .15rem;
-  }
+  .record dt { margin-bottom: .15rem; }
   .record dd { margin: 0; max-width: 62ch; }
 
   .record .origin {
@@ -1339,6 +1437,15 @@ const KIND_LABEL = {
   module: "module",
   knowledge: "knows",
   dependency: "depends on"
+};
+
+// The status a kind already carries. A design map names a node by where its
+// question stands, so "open question · open" says one thing twice; the record
+// draws the status only where the map disagrees with the kind.
+const IMPLIED_STATUS = {
+  question: "open",
+  decision: "decided",
+  rejected: "rejected"
 };
 
 const KIND_COLUMN = {
@@ -1670,10 +1777,11 @@ function renderAspectBar() {
   const bar = document.getElementById("aspectBar");
   bar.textContent = "";
 
-  const label = document.createElement("span");
-  label.className = "bar-label";
-  label.textContent = "Aspects";
-  bar.append(label);
+  // Filtering and commands go into groups of their own, so the strip does not
+  // read as one row of interchangeable buttons.
+  const filters = document.createElement("div");
+  filters.className = "bar-filters";
+  bar.append(filters);
 
   const owner = aspectOwners();
   for (const aspect of MAP.nodes.filter(n => n.kind === "aspect")) {
@@ -1692,10 +1800,19 @@ function renderAspectBar() {
     name.textContent = aspect.title;
     const count = document.createElement("span");
     count.className = "count";
-    const openHere = MAP.nodes.filter(n => owner.get(n.id) === aspect.id && n.status === "open").length;
-    count.textContent = openHere ? `${openHere}?/${size}` : size;
-    count.title = openHere ? `${openHere} open of ${size} nodes` : `${size} nodes`;
+    count.textContent = size;
+    count.title = `${size} nodes`;
     chip.append(dot, name, count);
+
+    // An aspect that still holds questions carries the open colour as a pip.
+    // The ratio printed here before ("3?/3") needed a legend to read.
+    const openHere = MAP.nodes.filter(n => owner.get(n.id) === aspect.id && n.status === "open").length;
+    if (openHere) {
+      const pip = document.createElement("i");
+      pip.className = "pip";
+      pip.title = `${openHere} open`;
+      chip.append(pip);
+    }
 
     chip.addEventListener("click", () => {
       if (shown) hidden.add(aspect.id);
@@ -1704,29 +1821,12 @@ function renderAspectBar() {
       fit();
     });
 
-    bar.append(chip);
+    filters.append(chip);
   }
-
-  const qa = document.createElement("button");
-  qa.type = "button";
-  qa.className = "mode-toggle";
-  qa.style.marginLeft = "auto";
-  qa.textContent = "One question at a time";
-  qa.title = "Ask Claude to take the open questions one at a time";
-  qa.addEventListener("click", askOneAtATime);
-  bar.append(qa);
-
-  const apply = document.createElement("button");
-  apply.type = "button";
-  apply.className = "apply";
-  apply.id = "applyButton";
-  apply.addEventListener("click", applyPending);
-  bar.append(apply);
 
   const reset = document.createElement("button");
   reset.type = "button";
   reset.className = "reset";
-  reset.style.marginLeft = "0";
   reset.textContent = "Show all";
   reset.hidden = hidden.size === 0;
   reset.addEventListener("click", () => {
@@ -1734,7 +1834,34 @@ function renderAspectBar() {
     render();
     fit();
   });
-  bar.append(reset);
+  filters.append(reset);
+
+  const actions = document.createElement("div");
+  actions.className = "bar-actions";
+  bar.append(actions);
+
+  const qa = document.createElement("button");
+  qa.type = "button";
+  qa.className = "mode-toggle";
+  // A phone strip is mostly chips, so the label drops its first two words
+  // there instead of the chips dropping their room.
+  const wide = document.createElement("span");
+  wide.className = "wide-label";
+  wide.textContent = "One question at a time";
+  const narrow = document.createElement("span");
+  narrow.className = "narrow-label";
+  narrow.textContent = "One at a time";
+  qa.append(wide, narrow);
+  qa.title = "Ask Claude to take the open questions one at a time";
+  qa.addEventListener("click", askOneAtATime);
+  actions.append(qa);
+
+  const apply = document.createElement("button");
+  apply.type = "button";
+  apply.className = "apply";
+  apply.id = "applyButton";
+  apply.addEventListener("click", applyPending);
+  actions.append(apply);
 
   // The button is built empty here and carries its label only from updateApply,
   // so a redraw of the strip has to ask for the label back.
@@ -1820,29 +1947,35 @@ function renderSpec() {
 function renderPanel(node, neighbours) {
   panel.innerHTML = "";
 
+  // What the node is, where it stands and the way out, on one line: stacked,
+  // the three said nearly the same thing in three registers.
+  const meta = document.createElement("div");
+  meta.className = "record-meta";
+  panel.append(meta);
+
+  const kind = document.createElement("span");
+  kind.className = "panel-kind";
+  kind.textContent = KIND_LABEL[node.kind];
+  meta.append(kind);
+
+  if (node.status && node.status !== IMPLIED_STATUS[node.kind]) {
+    const status = document.createElement("span");
+    status.className = "status " + node.status;
+    status.textContent = node.status;
+    meta.append(status);
+  }
+
   const close = document.createElement("button");
   close.type = "button";
   close.className = "record-close";
   close.textContent = "✕";
   close.title = "Close the record";
   close.addEventListener("click", clearSelection);
-  panel.append(close);
-
-  const kind = document.createElement("div");
-  kind.className = "panel-kind";
-  kind.textContent = KIND_LABEL[node.kind];
-  panel.append(kind);
+  meta.append(close);
 
   const title = document.createElement("h2");
   title.textContent = node.title;
   panel.append(title);
-
-  if (node.status) {
-    const status = document.createElement("span");
-    status.className = "status " + node.status;
-    status.textContent = node.status;
-    panel.append(status);
-  }
 
   const list = document.createElement("dl");
   const rows = [
@@ -1988,15 +2121,22 @@ function renderChatSubject() {
   const node = selected ? byId.get(selected) : null;
 
   about.textContent = "";
+  const lead = document.createElement("span");
+  lead.className = "lead";
+  lead.textContent = "about";
+  about.append(lead);
+
   if (node) {
     const label = document.createElement("button");
     label.type = "button";
     label.textContent = node.title;
     label.title = "Show this node";
     label.addEventListener("click", () => select(node.id));
-    about.append(document.createTextNode("about "), label);
+    about.append(label);
   } else {
-    about.textContent = "about the map — pick a node to change the subject";
+    const what = document.createElement("span");
+    what.textContent = "the map — pick a node to change the subject";
+    about.append(what);
   }
 
   renderPresence();

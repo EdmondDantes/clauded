@@ -75,21 +75,23 @@ view where the reader put it; validate rejects an unknown status, a question
 without one, and a node that is not a mapping; a closing script tag in the data
 is escaped.
 
-- [ ] S7.1 The rest of the design critique
+- [x] S7.1 The rest of the design critique
       done: kickers, type registers, the control strip, gutters, the tooltip anchors and the chip counter are settled
       tier: T2
-      note: a designer reviewed the page on 2026-08-23. Fixed already — the record
-        no longer sits at a fixed height while the chat holds empty space; the dock
-        width is clamped so the graph survives 1100px and a phone shows the map at
-        all (the old phone rules lost on specificity and never applied); node state
-        moved to a stripe of its own, so hover, selection, unread and settled stop
-        speaking the same colour; selection dims the graph to .62 instead of .3;
-        the close button lost its browser defaults; the Finish label stopped
-        flickering. Left: two accent hues that duplicate aspect hues, kickers on
-        every plate, six type sizes and three faces, the control strip reading as
-        one undifferentiated row, 20px vs 16px gutters, the split looking like a
-        scrollbar, Fit/Clear and the toast overlapping on a narrow stage, and the
-        "3?/3" chip counter.
+      handoff: the aspect palette moved to violet, cyan and magenta, so no aspect
+        borrows a status hue; --step-micro and --gutter leave the page five sizes,
+        two faces and one gutter; the strip is .bar-filters and .bar-actions with a
+        rule between them; the handle draws a seam and a grip where it drew a
+        filled bar; the toast took the top of the graph and no longer meets
+        Fit/Clear; a chip prints its node count with an open-coloured pip instead
+        of "3?/3"; the record heads with kind, state and the close on one line, and
+        drops the state when the kind already says it.
+        Measured in headless Chrome at 1440, 700 and 390: the handle keeps its axis
+        in all four arrangements, the toast clears the toolbar at every width, and
+        .stage no longer reaches past the window. Two defects found on the way and
+        fixed — Chrome dropped the subject title whole out of an ellipsised box,
+        and the auto grid columns of .stage and .dock let the header overflow a
+        phone.
 
 - [ ] S6.1 State is one per project, not per map
       done: two maps in one project keep separate chats, resolved marks and storage keys
