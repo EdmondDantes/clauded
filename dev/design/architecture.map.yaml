@@ -3,126 +3,148 @@ source: the code itself · 2026-08-23
 spec:
   nodes: aspect · module · knowledge · dependency
   sources:
-    - web/, tools/, server/, skills/
+  - web/, tools/, server/, skills/
   edge: aspect holds module · module needs knowledge or dependency
-
 nodes:
-  - id: a-page
-    kind: aspect
-    title: The page
-    body: Everything the reader sees and does. It receives a finished map and never
-      reads a file of its own.
-    origin: web/
-
-  - id: a-build
-    kind: aspect
-    title: Turning YAML into a page
-    body: Reading the map, checking it, pulling in cited code, filling the template.
-    origin: tools/
-
-  - id: a-talk
-    kind: aspect
-    title: Talking to the session
-    body: The reader's side of the conversation and the tools Claude calls to join it.
-    origin: server/
-
-  - id: m-template
-    kind: module
-    title: web/map-template.html
-    body: Layout, panel, walkthrough, code window and the per-node threads. The data
-      arrives as a MAP literal; the page never fetches a map.
-    why: One template for every map, so two maps of one project cannot end up with
-      two sets of conventions.
-    origin: web/map-template.html
-
-  - id: m-mapkit
-    kind: module
-    title: tools/mapkit.py
-    body: Loads the YAML, validates it, copies cited lines out of the files, colours
-      them when asked, and substitutes the result into the template.
-    cost: Both the builder and the server import it, so a change here reaches every
-      way a map can be opened at once.
-    origin: tools/mapkit.py
-
-  - id: m-build
-    kind: module
-    title: tools/build-map.py
-    body: The command line around mapkit — one map to one HTML file, for publishing
-      or for reading without a server.
-    origin: tools/build-map.py
-
-  - id: m-maps
-    kind: module
-    title: server/maps.py
-    body: The localhost server. Renders each request through mapkit, holds the
-      threads, and lets a caller block until the reader says something.
-    origin: server/maps.py
-
-  - id: m-mcp
-    kind: module
-    title: server/mcp.py
-    body: JSON-RPC over stdio. Runs the server in the same process and exposes five
-      tools, two of which block on purpose.
-    why: Blocking is the whole design — while a question is open, no work starts.
-    origin: server/mcp.py
-
-  - id: m-skill
-    kind: module
-    title: skills/map/SKILL.md
-    body: How a map is built and how the questions are worked through. Rules, not code.
-    origin: skills/map/SKILL.md
-
-  - id: k-format
-    kind: knowledge
-    title: What a map is
-    body: Node fields, the two vocabularies, what an edge may say, and what makes a
-      map invalid. Held in one place — mapkit checks it, the page draws what passed.
-    origin: tools/mapkit.py, validate()
-
-  - id: k-thread
-    kind: knowledge
-    title: The thread and who waits on it
-    body: Per-node messages, the pointer at the question Claude waits for, and the
-      condition that wakes a blocked call.
-    origin: server/maps.py, State
-
-  - id: k-protocol
-    kind: knowledge
-    title: The MCP dialect
-    body: initialize, tools/list, tools/call, one JSON message per line. Nothing else
-      in the project knows this exists.
-    origin: server/mcp.py, handle()
-
-  - id: dep-yaml
-    kind: dependency
-    title: PyYAML
-    body: Reads the map file. Without it nothing renders.
-    origin: tools/mapkit.py
-
-  - id: dep-pygments
-    kind: dependency
-    title: Pygments
-    body: Colours cited code on the server. Optional by design — a snapshot renders
-      plain text when it is missing.
-    origin: tools/mapkit.py, colour()
-
-  - id: dep-fonts
-    kind: dependency
-    title: IBM Plex, from Google Fonts
-    body: The page's typefaces. A network-less viewer falls back to the system stack.
-    origin: web/map-template.html
-
+- id: a-page
+  kind: aspect
+  title: The page
+  body: Everything the reader sees and does. It receives a finished map and never reads a
+    file of its own.
+  origin: web/
+- id: a-build
+  kind: aspect
+  title: Turning YAML into a page
+  body: Reading the map, checking it, pulling in cited code, filling the template.
+  origin: tools/
+- id: a-talk
+  kind: aspect
+  title: Talking to the session
+  body: The reader's side of the conversation and the tools Claude calls to join it.
+  origin: server/
+- id: m-template
+  kind: module
+  title: web/map-template.html
+  body: Layout, panel, walkthrough, code window and the per-node threads. The data arrives
+    as a MAP literal; the page never fetches a map.
+  why: One template for every map, so two maps of one project cannot end up with two sets
+    of conventions.
+  origin: web/map-template.html
+  refs:
+  - file: web/map-template.html
+- id: m-mapkit
+  kind: module
+  title: tools/mapkit.py
+  body: Loads the YAML, validates it, copies cited lines out of the files, colours them when
+    asked, and substitutes the result into the template.
+  cost: Both the builder and the server import it, so a change here reaches every way a map
+    can be opened at once.
+  origin: tools/mapkit.py
+  refs:
+  - file: tools/mapkit.py
+- id: m-build
+  kind: module
+  title: tools/build-map.py
+  body: The command line around mapkit — one map to one HTML file, for publishing or for reading
+    without a server.
+  origin: tools/build-map.py
+  refs:
+  - file: tools/build-map.py
+- id: m-maps
+  kind: module
+  title: server/maps.py
+  body: The localhost server. Renders each request through mapkit, holds the threads, and
+    lets a caller block until the reader says something.
+  origin: server/maps.py
+  refs:
+  - file: server/maps.py
+- id: m-mcp
+  kind: module
+  title: server/mcp.py
+  body: JSON-RPC over stdio. Runs the server in the same process and exposes five tools, two
+    of which block on purpose.
+  why: Blocking is the whole design — while a question is open, no work starts.
+  origin: server/mcp.py
+  refs:
+  - file: server/mcp.py
+- id: m-skill
+  kind: module
+  title: skills/map/SKILL.md
+  body: How a map is built and how the questions are worked through. Rules, not code.
+  origin: skills/map/SKILL.md
+  refs:
+  - file: skills/map/SKILL.md
+- id: k-format
+  kind: knowledge
+  title: What a map is
+  body: Node fields, the two vocabularies, what an edge may say, and what makes a map invalid.
+    Held in one place — mapkit checks it, the page draws what passed.
+  origin: tools/mapkit.py, validate()
+- id: k-thread
+  kind: knowledge
+  title: The thread and who waits on it
+  body: Per-node messages, the pointer at the question Claude waits for, and the condition
+    that wakes a blocked call.
+  origin: server/maps.py, State
+- id: k-protocol
+  kind: knowledge
+  title: The MCP dialect
+  body: initialize, tools/list, tools/call, one JSON message per line. Nothing else in the
+    project knows this exists.
+  origin: server/mcp.py, handle()
+- id: dep-yaml
+  kind: dependency
+  title: PyYAML
+  body: Reads the map file. Without it nothing renders.
+  origin: tools/mapkit.py
+- id: dep-pygments
+  kind: dependency
+  title: Pygments
+  body: Colours cited code on the server. Optional by design — a snapshot renders plain text
+    when it is missing.
+  origin: tools/mapkit.py, colour()
+- id: dep-fonts
+  kind: dependency
+  title: IBM Plex, from Google Fonts
+  body: The page's typefaces. A network-less viewer falls back to the system stack.
+  origin: web/map-template.html
 edges:
-  - [a-page, m-template, holds]
-  - [a-build, m-mapkit, holds]
-  - [a-build, m-build, holds]
-  - [a-talk, m-maps, holds]
-  - [a-talk, m-mcp, holds]
-  - [a-talk, m-skill, holds]
-  - [m-mapkit, k-format, needs]
-  - [m-mapkit, dep-yaml, needs]
-  - [m-mapkit, dep-pygments, needs]
-  - [m-template, dep-fonts, needs]
-  - [m-maps, k-thread, needs]
-  - [m-mcp, k-protocol, needs]
-  - [m-build, k-format, needs]
+- - a-page
+  - m-template
+  - holds
+- - a-build
+  - m-mapkit
+  - holds
+- - a-build
+  - m-build
+  - holds
+- - a-talk
+  - m-maps
+  - holds
+- - a-talk
+  - m-mcp
+  - holds
+- - a-talk
+  - m-skill
+  - holds
+- - m-mapkit
+  - k-format
+  - needs
+- - m-mapkit
+  - dep-yaml
+  - needs
+- - m-mapkit
+  - dep-pygments
+  - needs
+- - m-template
+  - dep-fonts
+  - needs
+- - m-maps
+  - k-thread
+  - needs
+- - m-mcp
+  - k-protocol
+  - needs
+- - m-build
+  - k-format
+  - needs

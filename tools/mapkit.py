@@ -72,6 +72,38 @@ def vocabulary(spec):
     return {word for word in words if word in known}
 
 
+def citation_problems(where, refs):
+    """
+    What is wrong with a node's citations, before any file is opened.
+
+    A hand-written line number is refused outright: it names a place, and the
+    place moves under the first edit above it, quietly. A name and a line of
+    text are the two forms that move with the code.
+    """
+    problems = []
+
+    for ref in refs:
+        if not isinstance(ref, dict) or not ref.get("file"):
+            problems.append(f"{where}: a ref needs a 'file' field")
+            continue
+
+        if ref.get("lines"):
+            problems.append(f"{where}: {ref['file']} is cited by line number — "
+                            "cite a 'symbol' or an 'anchor' instead, and let the render find it")
+        if ref.get("symbol") and ref.get("anchor"):
+            problems.append(f"{where}: {ref['file']} carries both a symbol and an anchor")
+        if (ref.get("until") or ref.get("span")) and not ref.get("anchor"):
+            problems.append(f"{where}: {ref['file']} has an ending without an anchor to start from")
+        if ref.get("until") and ref.get("span"):
+            problems.append(f"{where}: {ref['file']} says both how far to read and where to stop")
+
+        span = ref.get("span")
+        if span is not None and (not isinstance(span, int) or span < 1 or span > MAX_FRAGMENT_LINES):
+            problems.append(f"{where}: {ref['file']} spans '{span}' — expected 1 to {MAX_FRAGMENT_LINES} lines")
+
+    return problems
+
+
 def validate(data):
     """Returns the list of problems found in the map; empty means it renders."""
     problems = []
@@ -108,6 +140,13 @@ def validate(data):
         if node.get("id") in seen:
             problems.append(f"{where}: id is used twice")
         seen.add(node.get("id"))
+
+        problems.extend(citation_problems(where, node.get("refs") or []))
+        # A module is a piece of the code, and a node that names one without
+        # pointing at it is the one place the map is allowed to hold knowledge
+        # of its own. It is not allowed.
+        if node.get("kind") == "module" and not (node.get("refs") or []):
+            problems.append(f"{where}: a module cites the code it is — give it a ref")
 
     if not any(node.get("kind") == "aspect" for node in data["nodes"]):
         problems.append("map: no aspect — every node hangs under one, and the filter needs it")
@@ -172,6 +211,133 @@ def colour(code, filename):
     return lines
 
 
+# The extensions whose structure is plain enough to find a name in without
+# parsing. Everything else — JavaScript, CSS, whatever sits inside an HTML file —
+# is cited by an anchor instead, which needs no language at all.
+SYMBOL_LANGUAGES = {".py", ".md"}
+
+
+def python_symbol(lines, name, start=0, end=None):
+    """
+    The line range of a `def` or `class`, or None.
+
+    The extent is where the indentation returns to the definition's own level,
+    which is what makes Python findable without a parser. A dotted name is a
+    name inside the range of the one before it.
+    """
+    end = len(lines) if end is None else end
+    if "." in name:
+        outer, inner = name.split(".", 1)
+        holder = python_symbol(lines, outer, start, end)
+        return python_symbol(lines, inner, holder[0], holder[1] + 1) if holder else None
+
+    head = re.compile(rf"^(\s*)(?:async\s+)?(?:def|class)\s+{re.escape(name)}\b")
+    for index in range(start, end):
+        found = head.match(lines[index])
+        if not found:
+            continue
+
+        indent = len(found.group(1))
+        last = index
+        for after in range(index + 1, end):
+            line = lines[after]
+            if line.strip() and len(line) - len(line.lstrip()) <= indent:
+                break
+            if line.strip():
+                last = after
+
+        return index, last
+
+    return None
+
+
+def markdown_symbol(lines, name):
+    """The line range of a heading, from it to the next heading as high or higher."""
+    head = re.compile(r"^(#+)\s*(.+?)\s*$")
+    for index, line in enumerate(lines):
+        found = head.match(line)
+        if not found or not found.group(2).startswith(name):
+            continue
+
+        depth = len(found.group(1))
+        for after in range(index + 1, len(lines)):
+            next_head = head.match(lines[after])
+            if next_head and len(next_head.group(1)) <= depth:
+                return index, after - 1
+
+        return index, len(lines) - 1
+
+    return None
+
+
+def find_symbol(path, lines, name):
+    """Returns (first, last) zero-based for a named thing, or a problem string."""
+    suffix = Path(path).suffix
+    if suffix not in SYMBOL_LANGUAGES:
+        return f"{path}: no symbol finder for {suffix or 'this file'} — cite it with an anchor"
+
+    span = python_symbol(lines, name) if suffix == ".py" else markdown_symbol(lines, name)
+    if span is None:
+        return f"{path}: no symbol named '{name}'"
+
+    return span
+
+
+def find_anchor(path, lines, ref):
+    """
+    Returns (first, last) zero-based for an anchored citation, or a problem.
+
+    The anchor is a line of the file, written out and compared with its own
+    whitespace stripped. It must appear once: a citation that has to say which
+    of three it means is a line number again, and rots the same way.
+
+    `until` ends the citation at the first later line that reads the same and
+    stands no deeper — which is what makes a bare `}` usable as an ending. To
+    stop somewhere inside the block, count the lines with `span`.
+    """
+    wanted = str(ref["anchor"]).strip()
+    hits = [index for index, line in enumerate(lines) if line.strip() == wanted]
+    if not hits:
+        return f"{path}: no line reads '{wanted}'"
+    if len(hits) > 1:
+        found = ", ".join(str(index + 1) for index in hits[:4])
+        return f"{path}: '{wanted}' appears on lines {found} — make the anchor longer"
+
+    first = hits[0]
+    if ref.get("span"):
+        return first, min(first + int(ref["span"]) - 1, len(lines) - 1)
+
+    if ref.get("until"):
+        # The closing line at the anchor's own level, so a `}` inside the block
+        # does not end it. Indentation is not written out in the citation.
+        closing = str(ref["until"]).strip()
+        level = len(lines[first]) - len(lines[first].lstrip())
+        for after in range(first + 1, len(lines)):
+            line = lines[after]
+            if line.strip() == closing and len(line) - len(line.lstrip()) <= level:
+                return first, after
+        return (f"{path}: nothing after the anchor reads '{closing}' at its own level — "
+                "a line inside the block is reached with 'span' instead")
+
+    return first, first
+
+
+def cited_range(path, lines, ref):
+    """
+    Returns (first, last) zero-based for a citation, or a problem string.
+
+    Three forms, and none of them is a line number: a whole file, a named thing,
+    or an anchor. A number written by hand points at a place, and the place moves
+    with the first edit above it; a name and a line of text move with the code.
+    """
+    if ref.get("symbol"):
+        return find_symbol(path, lines, str(ref["symbol"]))
+    if ref.get("anchor"):
+        return find_anchor(path, lines, ref)
+
+    return 0, len(lines) - 1
+
+
 def read_fragment(root, ref, coloured):
     """Fills ref with the cited lines; returns the problem, or None."""
     path = Path(root) / ref["file"]
@@ -179,20 +345,22 @@ def read_fragment(root, ref, coloured):
         return f"{ref['file']}: no such file under {root}"
 
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    span = str(ref.get("lines", "")).strip()
+    if not lines:
+        return f"{ref['file']}: the file is empty"
 
-    if not span:
-        first, last = 1, len(lines)
-    else:
-        bounds = span.split("-")
-        try:
-            first = int(bounds[0])
-            last = int(bounds[-1])
-        except ValueError:
-            return f"{ref['file']}: lines '{span}' is not a range like 12-40"
+    found = cited_range(ref["file"], lines, ref)
+    if isinstance(found, str):
+        return found
 
-    if first < 1 or last > len(lines) or first > last:
-        return f"{ref['file']}: lines {span} fall outside the file ({len(lines)} lines)"
+    first, last = found[0] + 1, found[1] + 1
+    # A whole file is cited, not excerpted: the page opens it through the server
+    # rather than carrying it, and the cap is about what fits on a card.
+    if not ref.get("symbol") and not ref.get("anchor"):
+        ref["lines"] = ""
+        ref.pop("code", None)
+        ref.pop("html", None)
+        return None
+
     if last - first + 1 > MAX_FRAGMENT_LINES:
         return f"{ref['file']}: {last - first + 1} lines is too much to read on a card"
 
@@ -208,8 +376,16 @@ def read_fragment(root, ref, coloured):
     return None
 
 
-def collect_fragments(data, root, coloured=False):
-    """Fills in the code of every citation; returns the problems found."""
+def collect_fragments(data, root, coloured=False, strict=True):
+    """
+    Fills in the code of every citation; returns the problems found.
+
+    `strict` decides what a citation that no longer resolves costs. A build
+    refuses the map: a published page has nobody present to notice. A served page
+    marks the citation dead and carries on — the map is the surface a round is
+    worked on, and a stale ref must not stand between Edmond and an open
+    question.
+    """
     problems = []
 
     for node in data["nodes"]:
@@ -217,9 +393,18 @@ def collect_fragments(data, root, coloured=False):
             if not isinstance(ref, dict) or "file" not in ref:
                 problems.append(f"{node.get('id')}: a ref needs a 'file' field")
                 continue
+
             problem = read_fragment(root, ref, coloured)
-            if problem:
+            if not problem:
+                ref.pop("error", None)
+                continue
+
+            if strict:
                 problems.append(f"{node.get('id')}: {problem}")
+            else:
+                ref["error"] = problem
+                ref.pop("code", None)
+                ref.pop("html", None)
 
     return problems
 
@@ -262,12 +447,17 @@ def render(data, template=None, stamp=None, name=None):
     return re.sub(r"<title>.*?</title>", f"<title>{html.escape(data['title'])}</title>", page, count=1, flags=re.S)
 
 
-def build(path, root=".", coloured=False, template=None, stamp=None, name=None):
-    """Loads, checks and renders one map. Raises ValueError listing every problem."""
+def build(path, root=".", coloured=False, template=None, stamp=None, name=None, strict=True):
+    """
+    Loads, checks and renders one map. Raises ValueError listing every problem.
+
+    `strict` is what a citation that no longer resolves costs, and it differs by
+    who is looking: see collect_fragments.
+    """
     data = load(path)
     problems = validate(data)
     if not problems:
-        problems = collect_fragments(data, root, coloured)
+        problems = collect_fragments(data, root, coloured, strict)
     if problems:
         raise ValueError("\n".join(problems))
 

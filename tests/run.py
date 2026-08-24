@@ -415,6 +415,80 @@ def the_page_declares_each_name_once(root):
     check("every function is declared once", twice, [])
 
 
+def a_citation_names_a_thing(root):
+    """A citation follows the code it names instead of pointing at a line."""
+    import mapkit
+
+    sample = "\n".join([
+        '"""A file to cite."""',
+        "",
+        "",
+        "def early():",
+        "    return 1",
+        "",
+        "",
+        "def cited():",
+        '    """The thing the map points at."""',
+        '    return "here"',
+        "",
+    ])
+    (root / "sample.py").write_text(sample, encoding="utf-8")
+
+    node = {"id": "n", "kind": "decision", "title": "t", "body": "b", "origin": "tests",
+            "refs": [{"file": "sample.py", "symbol": "cited"}]}
+    # An aspect of its own, so validate answers about the citation and nothing else.
+    holder = {"id": "a", "kind": "aspect", "title": "t", "body": "b", "origin": "tests"}
+    data = {"title": "m", "spec": {"nodes": "aspect | decision"}, "nodes": [holder, node],
+            "edges": [["a", "n", "holds"]]}
+
+    check("a symbol resolves", mapkit.collect_fragments(data, str(root)), [])
+    where = node["refs"][0]["lines"]
+    check("to the thing it names", node["refs"][0]["code"].splitlines()[0], "def cited():")
+
+    # The point of the whole change: an edit above the citation moves the code,
+    # and the citation moves with it instead of pointing where it used to be.
+    (root / "sample.py").write_text("# a line nobody asked for\n# and another\n" + sample, encoding="utf-8")
+    node["refs"][0].pop("lines", None)
+    mapkit.collect_fragments(data, str(root))
+    check("an edit above it moves the citation", node["refs"][0]["lines"] != where, True)
+    check("and it still names the same thing", node["refs"][0]["code"].splitlines()[0], "def cited():")
+
+    node["refs"] = [{"file": "sample.py", "symbol": "renamed"}]
+    problems = mapkit.collect_fragments(data, str(root))
+    check("a symbol that is gone is a problem", len(problems) == 1 and "no symbol named" in problems[0], True)
+
+    node["refs"] = [{"file": "sample.py", "symbol": "renamed"}]
+    check("lenient, it rides on the ref", mapkit.collect_fragments(data, str(root), strict=False), [])
+    check("where the page can see it", "no symbol named" in node["refs"][0]["error"], True)
+
+    node["refs"] = [{"file": "sample.py", "anchor": "return 1"}]
+    check("an anchor resolves", mapkit.collect_fragments(data, str(root)), [])
+
+    node["refs"] = [{"file": "sample.py", "anchor": "def cited():", "span": 3}]
+    check("an anchor reads as far as it is told", mapkit.collect_fragments(data, str(root)), [])
+    check("and takes what lies between", len(node["refs"][0]["code"].splitlines()), 3)
+
+    node["refs"] = [{"file": "sample.py", "anchor": '"""A file to cite."""', "until": "def early():"}]
+    check("or up to a line at its own level", mapkit.collect_fragments(data, str(root)), [])
+    check("taking everything between", len(node["refs"][0]["code"].splitlines()), 4)
+
+    node["refs"] = [{"file": "sample.py", "anchor": "nothing reads like this"}]
+    problems = mapkit.collect_fragments(data, str(root))
+    check("an anchor that is gone is a problem", len(problems) == 1 and "no line reads" in problems[0], True)
+
+    node["refs"] = [{"file": "sample.py", "lines": "1-3"}]
+    problems = mapkit.validate(data)
+    check("a line number is refused", len(problems) == 1 and "cited by line number" in problems[0], True)
+
+    node["refs"] = [{"file": "sample.py", "symbol": "cited", "anchor": "return 1"}]
+    check("so are two forms at once", len(mapkit.validate(data)), 1)
+
+    uncited = {"title": "m", "spec": {"nodes": "aspect | module"}, "edges": [],
+               "nodes": [holder, {"id": "m", "kind": "module", "title": "t", "body": "b", "origin": "tests"}]}
+    check("a module must cite the code it is",
+          any("give it a ref" in problem for problem in mapkit.validate(uncited)), True)
+
+
 def main():
     os.environ["CLAUDE_CODE_SESSION_ID"] = SESSION
 
@@ -422,7 +496,8 @@ def main():
                 a_line_written_while_claude_works, the_pipe_serves_more_than_one,
                 a_map_holds_its_own_vocabulary, a_write_can_be_checked,
                 two_sessions_do_not_cross, two_servers_on_one_project,
-                the_old_state_is_inherited, the_page_declares_each_name_once):
+                the_old_state_is_inherited, the_page_declares_each_name_once,
+                a_citation_names_a_thing):
         print(f"\n--- {run.__doc__.splitlines()[0]}")
         root = Path(tempfile.mkdtemp(prefix="clauded-test-"))
         try:

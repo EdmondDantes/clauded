@@ -951,6 +951,15 @@
 
   .refs button:hover, .refs button:focus-visible { border-color: var(--accent); outline: none; }
 
+  /* A citation whose code is no longer there. It keeps its place in the record:
+     a missing citation is a fact about the map, not a thing to hide. */
+  .refs button.gone {
+    color: var(--rejected);
+    border-color: var(--rejected);
+    border-style: dashed;
+    text-decoration: line-through;
+  }
+
   .mode-toggle {
     flex: none;
     white-space: nowrap;
@@ -2163,10 +2172,25 @@ function renderPanel(node, neighbours) {
     for (const ref of node.refs) {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = ref.lines ? `${ref.file}:${ref.lines}` : ref.file;
-      button.disabled = !ref.code;
-      button.title = ref.code ? "Open the fragment" : "No fragment stored for this file";
-      button.addEventListener("click", () => openCode(ref));
+      // What the record cites, by the name it was cited under: a symbol, an
+      // anchor, or the file when the whole of it is the citation.
+      const what = ref.symbol || ref.anchor;
+      button.textContent = what ? `${ref.file} · ${what}` : ref.file;
+
+      if (ref.error) {
+        // The code moved out from under the citation. Saying so where the
+        // citation is beats opening a window on whatever stands there now.
+        button.disabled = true;
+        button.classList.add("gone");
+        button.title = ref.error;
+      } else {
+        // Without stored code the whole file is the citation, and the server
+        // hands it over; opened as a file there is nothing to open.
+        button.disabled = !ref.code && !window.mapBridge;
+        button.title = ref.code ? "Open the fragment" : "Open the file";
+        button.addEventListener("click", () => openCode(ref));
+      }
+
       dd.append(button);
     }
 

@@ -653,7 +653,7 @@ class Handler(BaseHTTPRequestHandler):
                 data = mapkit.load(source)
                 problems = mapkit.validate(data)
                 if not problems:
-                    problems = mapkit.collect_fragments(data, self.server.root, coloured=True)
+                    problems = mapkit.collect_fragments(data, self.server.root, coloured=True, strict=False)
                 if problems:
                     self.json_reply(422, {"error": problems})
                     return
@@ -730,7 +730,11 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         try:
-            _, page = mapkit.build(source, root, coloured=True, stamp=self.map_stamp(name), name=name)
+            # Lenient on purpose: a citation that no longer resolves marks
+            # itself dead in the record, and the map stays workable. The static
+            # build refuses instead — nobody is present to notice there.
+            _, page = mapkit.build(source, root, coloured=True, stamp=self.map_stamp(name),
+                                   name=name, strict=False)
         except ValueError as error:
             problems = "".join(f"<li>{line}</li>" for line in str(error).splitlines())
             self.reply(422, f"<h1>{name} does not validate</h1><ul>{problems}</ul>")
