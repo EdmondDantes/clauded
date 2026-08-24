@@ -28,7 +28,7 @@ def main():
     parser.add_argument("--open", metavar="NAME", help="open this map in the browser once the server is up")
     args = parser.parse_args()
 
-    server, state, url = maps.start(args.root, args.port)
+    server, _, url = maps.start(args.root, args.port)
     names = ", ".join(maps.maps_in(args.root)) or "none yet"
     print(f"{url} — maps: {names}", flush=True)
 

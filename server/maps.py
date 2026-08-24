@@ -325,7 +325,7 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(status, json.dumps(payload, ensure_ascii=False), "application/json")
 
     def asked_map(self):
-        """The map named in the query string, or None."""
+        """The map named in the query string; empty when the request names none."""
         return (parse_qs(urlsplit(self.path).query).get("map") or [""])[0].strip("/")
 
     def state_for(self, name):
