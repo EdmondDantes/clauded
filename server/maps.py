@@ -17,6 +17,7 @@ import fcntl
 import itertools
 import json
 import os
+import signal
 import subprocess
 import threading
 import time
@@ -68,27 +69,44 @@ def map_changed(name):
     GENERATION[name] = GENERATION.get(name, 0) + 1
 
 
-def sweep():
-    """Removes the record of every server that is no longer running."""
+def running_records():
+    """Every server alive on this machine, its record as it was written."""
     if not SERVERS.is_dir():
-        return
+        return []
 
+    alive = []
     for path in sorted(SERVERS.glob("*.json")):
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
             os.kill(int(record["pid"]), 0)
         except (OSError, ValueError, KeyError):
             path.unlink(missing_ok=True)
+            continue
+
+        alive.append(record)
+
+    return alive
 
 
-def announce(url, root):
+def sweep():
+    """Removes the record of every server that is no longer running."""
+    running_records()
+
+
+def announce(url, root, kind="session"):
     """
     Writes this process's address where the Stop hook will find it, and returns
     the record.
 
     The session id comes from the environment Claude Code gives an MCP server it
     starts; the hook has the same id in its own input, and that is what pairs the
-    two. The record is removed when the process ends.
+    two. `kind` says who started the server — a session, or a person at a
+    terminal — and the session id cannot answer that: anything launched from a
+    Claude Code shell inherits the variable, so a server started by hand carries
+    the id of the session whose terminal it was typed in.
+
+    The record is removed when the process ends, including on a signal: `atexit`
+    alone leaves it behind after a kill, and the address then names nothing.
 
     A project holding maps is also written to LAST_ROOT, where the next server
     started somewhere mapless will read it.
@@ -103,13 +121,28 @@ def announce(url, root):
         "root": str(Path(root).resolve()),
         "pid": os.getpid(),
         "session": os.environ.get("CLAUDE_CODE_SESSION_ID"),
+        "kind": kind,
     }
 
     # By pid and port: one process may hold more than one server, and each
     # server's record has to come and go with the server itself.
     mine = SERVERS / f"{os.getpid()}-{urlsplit(url).port}.json"
     mine.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
-    atexit.register(lambda: mine.unlink(missing_ok=True))
+
+    def forget():
+        mine.unlink(missing_ok=True)
+
+    atexit.register(forget)
+    if threading.current_thread() is threading.main_thread():
+        before = signal.getsignal(signal.SIGTERM)
+
+        def leaving(number, frame):
+            forget()
+            if callable(before):
+                before(number, frame)
+            raise SystemExit(0)
+
+        signal.signal(signal.SIGTERM, leaving)
 
     if maps_in(record["root"]):
         LAST_ROOT.write_text(record["root"], encoding="utf-8")
@@ -963,7 +996,7 @@ class Answerer(threading.Thread):
 PORT_TRIES = 12
 
 
-def start(root=".", port=8791):
+def start(root=".", port=8791, kind="session"):
     """
     Starts the server on a background thread and returns (server, board, url).
 
@@ -996,6 +1029,6 @@ def start(root=".", port=8791):
     Answerer(board, Path(root)).start()
 
     url = f"http://127.0.0.1:{port}"
-    announce(url, root)
+    announce(url, root, kind)
 
     return server, board, url

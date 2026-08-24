@@ -53,11 +53,14 @@ def server_of(session):
         if alive(record):
             live.append(record)
 
-    mine = [record for record in live if session and record.get("session") == session]
+    mine = [record for record in live
+            if session and record.get("kind", "session") == "session" and record.get("session") == session]
     if mine:
         return mine[-1]
 
-    loose = [record for record in live if not record.get("session")]
+    # A server started at a terminal belongs to nobody in particular. It is taken
+    # only when it is the only one alive: with two there is nothing to choose by.
+    loose = [record for record in live if record.get("kind") == "hand"]
     return loose[0] if len(loose) == 1 else None
 
 
