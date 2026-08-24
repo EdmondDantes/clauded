@@ -180,9 +180,16 @@ address bar.
 Done when: the reader moves between maps without typing a URL, and each map
 keeps its own conversation.
 
-- [ ] S9.1 The page offers the maps of the project
+- [x] S9.1 The page offers the maps of the project
       done: a menu on the page lists every map and opens the one picked
       tier: T2 · role: —
+      handoff: GET /api/maps answers name and title for every map of the project,
+        keeping a map whose YAML no longer parses in the list under its name. The
+        title in the header becomes a button when the answer holds more than one
+        map, and the card under it links to /map/<name>, marking the open one with
+        aria-current. Opened as a file the title stays plain text. Checked against
+        the running server: both maps listed, the open one marked, /map/architecture
+        answers 200.
 
 ## S4 — The mode in the skill
 

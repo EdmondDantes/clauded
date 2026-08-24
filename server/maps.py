@@ -375,6 +375,10 @@ class Handler(BaseHTTPRequestHandler):
             self.json_reply(200, data)
             return
 
+        if path == "/api/maps":
+            self.json_reply(200, {"maps": self.map_listing()})
+            return
+
         if path == "/api/source":
             self.serve_source(root)
             return
@@ -441,6 +445,21 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         self.reply(200, page)
+
+    def map_listing(self):
+        """
+        Every map of the project: the name it is served under and the title it
+        carries. A map whose YAML no longer parses keeps its name in the list,
+        because a menu that hides a broken map hides the way to fix it.
+        """
+        listing = []
+        for name, source in maps_in(self.server.root).items():
+            try:
+                title = mapkit.load(source).get("title") or name
+            except Exception:
+                title = name
+            listing.append({"name": name, "title": title})
+        return listing
 
     def map_stamp(self, name):
         """

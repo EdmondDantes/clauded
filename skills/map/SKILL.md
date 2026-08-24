@@ -78,6 +78,11 @@ With the plugin's MCP server running, the loop is:
 5. `wait_for_apply` when the questions are done. Work starts on what it returns,
    and not before.
 
+A project can hold several maps, and each keeps its own conversation: a reply
+written on one is not on the other. Every tool takes `name` and falls back to
+the map opened last, so name the map whenever two are in play. The page's title
+lists the project's maps and opens the one picked.
+
 The page's "One question at a time" button opens nothing of its own: it writes
 the mode into the conversation as a message from Edmond, pointed at the first
 open question. Reaching it means the loop above is what he wants — take the

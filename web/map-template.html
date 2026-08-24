@@ -132,11 +132,67 @@
   }
 
   h1 {
+    position: relative;
     margin: 0;
     font-size: var(--step-2);
     font-weight: 600;
     letter-spacing: .01em;
   }
+
+  /* The map's name opens the other maps of the project: they are served under
+     one address each, and moving between them otherwise means typing a path. */
+  .map-button {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  .map-button:hover, .map-button[aria-expanded="true"] { color: var(--accent); }
+  .map-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  .map-menu {
+    position: absolute;
+    top: calc(100% + .45rem);
+    left: 0;
+    z-index: 15;
+    min-width: 17rem;
+    padding: .3rem;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+  }
+
+  .map-menu[hidden] { display: none; }
+
+  .map-item {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    padding: .3rem .5rem;
+    font-size: var(--step-0);
+    font-weight: 400;
+    color: var(--ink);
+    text-decoration: none;
+    border-radius: 5px;
+  }
+
+  .map-item code {
+    margin-left: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step-micro);
+    color: var(--ink-muted);
+  }
+
+  .map-item:hover { background: var(--surface-sunk); }
+  .map-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .map-item[aria-current="page"] { color: var(--accent); }
 
   .source {
     font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -2900,6 +2956,71 @@ function chevronIcon(direction) {
   return svg;
 }
 
+/**
+ * Puts the map's title in the header, and behind it the project's other maps.
+ *
+ * The menu appears only when the server answers with more than one map: opened
+ * as a file, or in a project that holds a single map, the title is plain text.
+ */
+async function renderMapPicker() {
+  const title = document.getElementById("mapTitle");
+  title.textContent = MAP.title;
+
+  if (location.protocol !== "http:" && location.protocol !== "https:") return;
+
+  let answer;
+  try {
+    answer = await fetch("/api/maps").then(response => (response.ok ? response.json() : null));
+  } catch (error) {
+    return;
+  }
+
+  const listing = (answer && answer.maps) || [];
+  if (listing.length < 2) return;
+
+  title.textContent = "";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "map-button";
+  button.setAttribute("aria-haspopup", "true");
+  button.setAttribute("aria-expanded", "false");
+  button.title = "The maps of this project";
+  button.append(document.createTextNode(MAP.title), chevronIcon("down"));
+  title.append(button);
+
+  const menu = document.createElement("div");
+  menu.className = "map-menu";
+  menu.hidden = true;
+
+  for (const map of listing) {
+    const item = document.createElement("a");
+    item.className = "map-item";
+    item.href = `/map/${encodeURIComponent(map.name)}`;
+    if (map.name === MAP_NAME) item.setAttribute("aria-current", "page");
+    const label = document.createElement("span");
+    label.textContent = map.title;
+    const file = document.createElement("code");
+    file.textContent = map.name;
+    item.append(label, file);
+    menu.append(item);
+  }
+
+  title.append(menu);
+
+  const show = open => {
+    menu.hidden = !open;
+    button.setAttribute("aria-expanded", String(open));
+  };
+
+  button.addEventListener("click", () => show(menu.hidden));
+  document.addEventListener("click", event => {
+    if (!menu.hidden && !title.contains(event.target)) show(false);
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") show(false);
+  });
+}
+
 function swapIcon() {
   const svg = el("svg", { width: 14, height: 14, viewBox: "0 0 16 16", "aria-hidden": "true" });
   svg.append(el("path", {
@@ -3073,7 +3194,7 @@ document.getElementById("chatSend").addEventListener("click", () => {
 
 loadPending();
 document.title = MAP.title || "Map";
-document.getElementById("mapTitle").textContent = MAP.title;
+renderMapPicker();
 document.getElementById("mapSource").textContent = MAP.source;
 
 render();
