@@ -779,6 +779,10 @@
      so a new node takes the ink colour and gives it up when the glow ends. */
   .node.fresh .state { fill: var(--ink); }
 
+  /* A node rewritten in place says so on its stripe alone: it was already on
+     the map, and dropping it in again would read as a second arrival. */
+  .node.touched .state { display: block; fill: var(--accent); }
+
   .node.settled .mark { fill: var(--decided); stroke: var(--decided); }
 
   /* A thread Claude has written to, which is not the one on screen. */
@@ -786,6 +790,7 @@
   @media (prefers-reduced-motion: no-preference) {
     .node.fresh { animation: arrive .5s ease-out; }
     .node.fresh .state { animation: glow 1.8s ease-in-out 3; }
+    .node.touched .state { animation: glow 1.8s ease-in-out 2; }
   }
 
   @keyframes arrive {
@@ -1494,10 +1499,6 @@ const IMPLIED_STATUS = {
   rejected: "rejected"
 };
 
-const KIND_COLUMN = {
-  aspect: 0, question: 1, decision: 1, rejected: 2,
-  module: 1, knowledge: 2, dependency: 2
-};
 const NODE_W = 232;
 const NODE_H = 52;
 const COL_GAP = 96;
@@ -1546,33 +1547,55 @@ function childrenOf(edges) {
  * onto the nodes and returns the drawing bounds, used to fit the view.
  */
 function layout(nodes, edges) {
-  const column = KIND_COLUMN;
-  const cursor = [0, 0, 0];
+  const shown = new Set(nodes.map(node => node.id));
   const children = childrenOf(edges);
-  const shown = new Set(nodes.map(n => n.id));
+  const parents = parentsOf(edges);
+  const column = columnsOf(nodes, parents);
 
-  // Walk aspects in order so that an aspect's children sit next to it.
-  const placed = new Set();
-  const place = id => {
-    if (placed.has(id) || !shown.has(id)) return;
-    const node = byId.get(id);
-    const col = column[node.kind];
-    node.x = col * (NODE_W + COL_GAP);
-    node.y = cursor[col];
-    cursor[col] += NODE_H + ROW_GAP;
-    placed.add(id);
-    for (const child of children.get(id) || []) place(child);
-  };
+  const width = nodes.length ? Math.max(...nodes.map(node => column.get(node.id))) + 1 : 1;
+  const lanes = Array.from({ length: width }, () => []);
+  for (const node of nodes) lanes[column.get(node.id)].push(node);
 
-  for (const node of nodes) if (node.kind === "aspect") place(node.id);
-  for (const node of nodes) place(node.id);
+  // Left to right: a lane is ordered by where the nodes pointing at it already
+  // stand, so an edge runs as straight as the columns allow. A node nothing
+  // points at keeps the order the file gives it.
+  const pull = new Map();
+  for (const lane of lanes) {
+    lane.forEach((node, order) => {
+      const above = (parents.get(node.id) || [])
+        .filter(id => shown.has(id))
+        .map(id => byId.get(id))
+        .filter(parent => typeof parent.y === "number");
+      pull.set(node.id, above.length
+        ? above.reduce((sum, parent) => sum + parent.y, 0) / above.length
+        : order * (NODE_H + ROW_GAP));
+    });
 
-  for (const node of nodes) {
-    const kids = (children.get(node.id) || []).filter(id => shown.has(id)).map(id => byId.get(id));
-    if (node.kind !== "aspect" || kids.length === 0) continue;
-    const top = Math.min(...kids.map(k => k.y));
-    const bottom = Math.max(...kids.map(k => k.y + NODE_H));
-    node.y = (top + bottom) / 2 - NODE_H / 2;
+    lane.sort((a, b) => pull.get(a.id) - pull.get(b.id));
+    lane.forEach((node, order) => {
+      node.x = column.get(node.id) * (NODE_W + COL_GAP);
+      node.y = order * (NODE_H + ROW_GAP);
+    });
+  }
+
+  // Right to left: a node stands against the middle of what it points at, which
+  // reads as a tree rather than as stacks. Centring moves nodes onto each other,
+  // so each lane is pushed apart again afterwards.
+  for (let index = lanes.length - 2; index >= 0; index--) {
+    for (const node of lanes[index]) {
+      const kids = (children.get(node.id) || []).filter(id => shown.has(id)).map(id => byId.get(id));
+      if (kids.length === 0) continue;
+      const top = Math.min(...kids.map(kid => kid.y));
+      const bottom = Math.max(...kids.map(kid => kid.y + NODE_H));
+      node.y = (top + bottom) / 2 - NODE_H / 2;
+    }
+
+    lanes[index].sort((a, b) => a.y - b.y);
+    let floor = null;
+    for (const node of lanes[index]) {
+      if (floor !== null && node.y < floor) node.y = floor;
+      floor = node.y + NODE_H + ROW_GAP;
+    }
   }
 
   if (nodes.length === 0) return { minX: 0, minY: 0, maxX: 1, maxY: 1 };
@@ -1583,6 +1606,50 @@ function layout(nodes, edges) {
     minX: Math.min(...xs), minY: Math.min(...ys),
     maxX: Math.max(...xs) + NODE_W, maxY: Math.max(...ys) + NODE_H
   };
+}
+
+/** Who points at whom, the other way round from childrenOf. */
+function parentsOf(edges) {
+  const parents = new Map();
+  for (const [from, to] of edges) {
+    if (!parents.has(to)) parents.set(to, []);
+    parents.get(to).push(from);
+  }
+
+  return parents;
+}
+
+/**
+ * Which column each node stands in: how far it is from a node nothing points
+ * at, counted along the edges. As many columns as the map is deep, and the
+ * vocabulary no longer decides position — a map of ten kinds lays out by the
+ * same rule as a map of three.
+ *
+ * The longest path, not the shortest: a node reachable both straight from an
+ * aspect and through a chain stands after the chain, so an edge never points
+ * backwards. A cycle has no longest path, and the node that closes it stops
+ * where it was first reached.
+ */
+function columnsOf(nodes, parents) {
+  const shown = new Set(nodes.map(node => node.id));
+  const column = new Map();
+  const walking = new Set();
+
+  const depth = id => {
+    if (column.has(id)) return column.get(id);
+    if (walking.has(id)) return 0;
+
+    walking.add(id);
+    const above = (parents.get(id) || []).filter(other => shown.has(other));
+    const mine = above.length ? Math.max(...above.map(depth)) + 1 : 0;
+    walking.delete(id);
+
+    column.set(id, mine);
+    return mine;
+  };
+
+  for (const node of nodes) depth(node.id);
+  return column;
 }
 
 /**
@@ -1661,6 +1728,10 @@ const unread = new Set();
 // separate thread. Lines wait here until Apply and survive a reload through
 // localStorage; with the server running they travel as they are written.
 const pending = { chat: [] };
+// Whether the round on screen has already been handed over. It stops a second
+// press of Finish from sending an empty round, and a line written afterwards
+// opens the next one.
+let handedOver = false;
 const STORE_KEY = `map-chat:${MAP_NAME}`;
 
 function loadPending() {
@@ -2219,6 +2290,8 @@ function renderChatSubject() {
 
 /** Adds one message from the reader and lets the server know, if it is there. */
 function say(text, about = selected) {
+  // Writing opens the round again, so Finish has something to hand over.
+  handedOver = false;
   const message = { role: "you", text, about, at: new Date().toISOString() };
   pending.chat.push(message);
   commitPending();
@@ -2291,7 +2364,9 @@ async function growMap() {
   const view = { scale, offsetX, offsetY };
   render();
 
-  if (moved) {
+  // Framing the graph again is for a graph that grew. A node rewritten in place
+  // leaves the picture where it was, so the reader's eye keeps its place.
+  if (moved || arrived.length + gone.length === 0) {
     scale = view.scale;
     offsetX = view.offsetX;
     offsetY = view.offsetY;
@@ -2300,7 +2375,8 @@ async function growMap() {
     fit();
   }
 
-  for (const node of [...arrived, ...changed]) markFresh(node.id);
+  for (const node of arrived) markFresh(node.id);
+  for (const node of changed) markTouched(node.id);
 
   const said = [];
   if (arrived.length) said.push(`new: ${arrived.map(node => node.title).join(", ")}`);
@@ -2342,14 +2418,24 @@ function commitPending() {
  * class set on the old element would vanish with it.
  */
 const fresh = new Map();
+const touched = new Map();
 const FRESH_FOR = 8000;
 
 function markFresh(id) {
-  fresh.set(id, Date.now());
+  mark(fresh, id);
+}
+
+/** A node that was already there and has just been rewritten. */
+function markTouched(id) {
+  mark(touched, id);
+}
+
+function mark(register, id) {
+  register.set(id, Date.now());
   renderNodeStates();
   setTimeout(() => {
-    if (Date.now() - (fresh.get(id) || 0) >= FRESH_FOR - 50) {
-      fresh.delete(id);
+    if (Date.now() - (register.get(id) || 0) >= FRESH_FOR - 50) {
+      register.delete(id);
       renderNodeStates();
     }
   }, FRESH_FOR);
@@ -2362,6 +2448,7 @@ function renderNodeStates() {
     group.classList.toggle("settled", settled.has(id));
     group.classList.toggle("unread", unread.has(id));
     group.classList.toggle("fresh", fresh.has(id));
+    group.classList.toggle("touched", touched.has(id));
   }
 }
 
@@ -2371,9 +2458,10 @@ function updateApply() {
   // This button ends the round: until it is pressed the work goes on.
   const count = pendingCount();
   // A round already handed over, with nothing written since, has nothing to
-  // hand over again: pressing Finish twice would replay the whole log.
-  const last = pending.chat[pending.chat.length - 1];
-  const closed = Boolean(last && last.kind === "finish") && count === 0;
+  // hand over again: pressing Finish twice would replay the whole log, or hand
+  // over an empty one. The flag is set the moment Finish is pressed, because
+  // the line that records it only comes back from the server a poll later.
+  const closed = handedOver && count === 0;
   const label = count ? `Finish · ${count} to hand over` : closed ? "Handed over" : "Finish";
   button.disabled = closed;
   // Rewriting the same text on every poll made the button flicker.
@@ -2387,6 +2475,8 @@ function updateApply() {
  * and the reader pastes it into the conversation.
  */
 async function applyPending() {
+  if (handedOver && pendingCount() === 0) return;
+  handedOver = true;
 
   const lines = [`# ${MAP.title}`];
   for (const message of pending.chat.filter(message => !message.applied)) {
@@ -2423,7 +2513,9 @@ async function applyPending() {
 /** The reader's last word about each node, next to the conversation itself. */
 function lastWordPerNode() {
   const answers = {};
-  for (const message of pending.chat) {
+  // The round being handed over, not every round the page remembers: a line
+  // from a round that closed yesterday is not an answer to anything now.
+  for (const message of pending.chat.filter(message => !message.applied)) {
     if (message.role === "you" && message.about) answers[message.about] = message.text;
   }
 

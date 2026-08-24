@@ -265,9 +265,48 @@ def the_pipe_serves_more_than_one(root):
     proc.wait(timeout=10)
 
 
+def a_map_holds_its_own_vocabulary(root):
+    """A design map refuses a kind it never declared."""
+    import mapkit
+
+    source = root / "dev" / "design" / "alpha.map.yaml"
+    data = mapkit.load(source)
+    check("the fixture validates", mapkit.validate(data), [])
+    check("it declares four kinds", sorted(mapkit.vocabulary(data["spec"])),
+          ["aspect", "decision", "question", "rejected"])
+
+    data["nodes"].append({"id": "k", "kind": "knowledge", "title": "t", "body": "b", "origin": "tests"})
+    problems = mapkit.validate(data)
+    check("a knowledge node is refused", len(problems) == 1 and "not a kind this map declares" in problems[0], True)
+
+
+def a_write_can_be_checked(root):
+    """A node written through the tools can be read back through them."""
+    session = mcp.Session(str(root), PORT)
+    session.ensure()
+    session.last_map = "alpha"
+
+    written = json.loads(mcp.tool_add_node(session, {
+        "id": "q-new", "kind": "question", "status": "open", "title": "A new question",
+        "body": "written by the tests", "edges": [["a", "q-new", "holds"]]}))
+    check("add_node answers with the node", written["node"]["title"], "A new question")
+
+    back = json.loads(mcp.tool_read_map(session, {"node": "q-new"}))
+    check("read_map finds it", back["node"]["body"], "written by the tests")
+    check("with the edge that holds it", back["edges"], [["a", "q-new", "holds"]])
+
+    changed = json.loads(mcp.tool_edit_node(session, {"id": "q-new", "body": "rewritten"}))
+    check("edit_node answers with the change", changed["node"]["body"], "rewritten")
+
+    mcp.tool_remove_node(session, {"id": "q-new"})
+    check("remove_node takes it off", mcp.tool_read_map(session, {"node": "q-new"}), "q-new is not on alpha.")
+    session.server.shutdown()
+
+
 def main():
     for run in (state_is_per_map, the_wire_is_bounded, a_restart_remembers, finish_is_one_signal,
-                a_line_written_while_claude_works, the_pipe_serves_more_than_one):
+                a_line_written_while_claude_works, the_pipe_serves_more_than_one,
+                a_map_holds_its_own_vocabulary, a_write_can_be_checked):
         print(f"\n--- {run.__doc__.splitlines()[0]}")
         root = Path(tempfile.mkdtemp(prefix="clauded-test-"))
         try:

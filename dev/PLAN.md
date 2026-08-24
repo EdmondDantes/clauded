@@ -271,6 +271,35 @@ server and the real MCP handlers.
       note: .clauded/state.json and the localStorage key `map-chat` are orphaned
         by the split; nothing reads or removes them.
 
+## S12 — What Edmond found on the map  [in progress]
+
+He worked a round on the map with a subagent on 2026-08-24 and named what was
+wrong with it. Fixed: the graph had three columns hardcoded by kind, so a
+vocabulary of ten kinds had nowhere to stand — a column is now the distance from
+a node nobody points at, counted along the edges, and there are as many columns
+as the map is deep (measured: a chain of eight lays out in eight); a node
+rewritten in place played the arrival animation and the view re-framed under the
+reader, so a change now says so on its stripe alone and the framing is left
+where it was; a write could only be checked by reading the YAML, which the map's
+own contract forbids — `add_node` and `edit_node` answer with the node as the
+file holds it, and `read_map` reads the map back; a design map silently accepted
+`knowledge` nodes, and a map is now held to the vocabulary its own spec
+declares.
+
+- [ ] S12.1 Finish hands over answers, not the last thing said
+      done: `applied.answers` holds what settles a question, and nothing else
+      tier: T1 · role: —
+      note: `lastWordPerNode` takes the last line about a node as its answer, so
+        "пиздец боред" arrived as the answer to a question. Narrowed to the round
+        being handed over, which is not the same as narrowing it to answers.
+- [ ] S12.2 A question settled in code but not in a document
+      done: q-panel is closed on the map, and a document records why
+      tier: T1 · role: —
+      note: the page has the panel and no popover, so the question is settled in
+        fact. `d-derived` requires a source document, and the project has no
+        dev/DECISIONS.md to put it in — that file needs agreeing before the
+        question can close.
+
 ## S4 — The mode in the skill
 
 - [x] S4.1 Architecture map vocabulary against a real project

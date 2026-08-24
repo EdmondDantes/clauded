@@ -148,6 +148,20 @@ nodes:
   - a table keyed by session id
   - one record per session file
   - the hook asks the server
+- id: q-orphan-state
+  kind: question
+  title: The pre-split state is left behind
+  body: State moved to .clauded/<map>.state.json and the chat moved to a per-map storage key.
+    The old .clauded/state.json and the old map-chat key are still on disk and in the browser,
+    read by nobody and deleted by nobody.
+  origin: S11.2 in dev/PLAN.md, from the review of 2026-08-24
+  why: A map opened before the split loses its conversation and its last Apply without saying
+    so; the stale files stay forever and mislead the next reader.
+  status: open
+  options:
+  - migrate once on first read
+  - delete the old files and start clean
+  - leave them and say nothing
 edges:
 - - a-contract
   - d-derived
@@ -181,4 +195,7 @@ edges:
   - rejects
 - - a-render
   - q-server-slot
+  - holds
+- - a-render
+  - q-orphan-state
   - holds

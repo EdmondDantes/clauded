@@ -58,6 +58,20 @@ def map_stamp(path):
     return f"{state.st_mtime_ns}-{state.st_size}"
 
 
+def vocabulary(spec):
+    """
+    The kinds this map declares, taken from its own `spec.nodes`.
+
+    The spec is written for a reader — "aspect · question · decision · rejected
+    alternative" — so the words are matched against the kinds the renderer
+    knows and the rest is ignored. An empty answer means the spec named none,
+    and the map is then checked against every kind instead of its own.
+    """
+    known = DESIGN_KINDS | ARCHITECTURE_KINDS
+    words = re.split(r"[^a-z]+", (spec or {}).get("nodes", "").lower())
+    return {word for word in words if word in known}
+
+
 def validate(data):
     """Returns the list of problems found in the map; empty means it renders."""
     problems = []
@@ -68,7 +82,11 @@ def validate(data):
     if problems:
         return problems
 
-    kinds = DESIGN_KINDS | ARCHITECTURE_KINDS
+    # A map that declares its own vocabulary is held to it. A design map holding
+    # a `knowledge` node is a map of two minds, and the reader has no way to tell
+    # which meaning a colour carries.
+    declared = vocabulary(data.get("spec"))
+    kinds = declared or (DESIGN_KINDS | ARCHITECTURE_KINDS)
     seen = set()
 
     for index, node in enumerate(data["nodes"]):
@@ -85,7 +103,8 @@ def validate(data):
             if not node.get(field):
                 problems.append(f"{where}: field '{field}' is missing")
         if node.get("kind") and node["kind"] not in kinds:
-            problems.append(f"{where}: unknown kind '{node['kind']}'")
+            named = " this map declares" if declared else ""
+            problems.append(f"{where}: '{node['kind']}' is not a kind{named} ({', '.join(sorted(kinds))})")
         if node.get("id") in seen:
             problems.append(f"{where}: id is used twice")
         seen.add(node.get("id"))

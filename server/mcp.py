@@ -6,6 +6,7 @@ map server in the same process. The tools:
 
     open_map          render a map and hand back its address
     open_questions    what is still open on the map, so the round has an end
+    read_map          the map as the file holds it, to check what a write did
     add_node          write a new node into the map while the talk goes on
     edit_node         change what a node says
     remove_node       take a node off the map when it turned out wrong
@@ -62,6 +63,17 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
+            },
+        },
+    },
+    {
+        "name": "read_map",
+        "description": "The map as its file now holds it: spec, nodes and edges. Pass `node` for one node and the edges that touch it. Use it to check what a write did — the file itself is not yours to read.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "node": {"type": "string", "description": "One node id; omit for the whole map"},
                 "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
             },
         },
@@ -360,6 +372,28 @@ def tool_open_questions(session, args):
     return json.dumps({"map": name, "open": questions}, ensure_ascii=False, indent=2)
 
 
+def tool_read_map(session, args):
+    """
+    The map's own data, so a write can be checked through the same door it went
+    in by. Reading the YAML instead would tie the caller to where the file sits.
+    """
+    session.ensure()
+    name, source = named_map(session, args)
+    data = mapkit.load(source)
+
+    wanted = args.get("node")
+    if not wanted:
+        return json.dumps({"map": name, "spec": data["spec"], "nodes": data["nodes"], "edges": data["edges"]},
+                          ensure_ascii=False, indent=2)
+
+    node = next((one for one in data["nodes"] if one["id"] == wanted), None)
+    if node is None:
+        return f"{wanted} is not on {name}."
+
+    touching = [edge for edge in data["edges"] if wanted in (edge[0], edge[1])]
+    return json.dumps({"map": name, "node": node, "edges": touching}, ensure_ascii=False, indent=2)
+
+
 def tool_add_node(session, args):
     session.ensure()
     _, source = named_map(session, args)
@@ -394,7 +428,9 @@ def tool_add_node(session, args):
     if failed:
         return failed
 
-    return f"{args['id']} is on the map, and {source} now holds it."
+    # The node as the file now holds it, so the caller can check what landed
+    # without reading the YAML: the map is only reachable through these tools.
+    return json.dumps({"written": str(source), "node": node}, ensure_ascii=False, indent=2)
 
 
 def open_map_file(session, args):
@@ -439,7 +475,7 @@ def tool_edit_node(session, args):
     if failed:
         return failed
 
-    return f"{args['id']} updated in {source}."
+    return json.dumps({"written": str(source), "node": node}, ensure_ascii=False, indent=2)
 
 
 def tool_remove_node(session, args):
@@ -599,6 +635,7 @@ def tool_wait_for_apply(session, args):
 HANDLERS = {
     "open_map": tool_open_map,
     "open_questions": tool_open_questions,
+    "read_map": tool_read_map,
     "add_node": tool_add_node,
     "edit_node": tool_edit_node,
     "remove_node": tool_remove_node,
