@@ -159,6 +159,18 @@ nodes:
     once: the first map to ask takes .clauded/state.json and renames it aside, and the page
     does the same with the map-chat key'
   status: decided
+- id: r-code-tabs
+  kind: rejected
+  title: Tabs in the code window
+  body: A node citing several places would open one code window with a tab per citation, switching
+    between them in place.
+  origin: design by Fable, 2026-08-24; rejected the same day
+  why: 'The record already lists a button per citation, and the window opens the one that
+    was clicked. Tabs save one click and buy a second place where the window keeps state.
+    The deepest node cites three places today: this is the abstraction at the first case.'
+  cost: Switching between the citations of one node means going back to the record. Worth
+    revisiting at a node that cites five.
+  status: rejected
 edges:
 - - a-contract
   - d-derived
@@ -195,4 +207,7 @@ edges:
   - holds
 - - a-render
   - q-orphan-state
+  - holds
+- - a-interaction
+  - r-code-tabs
   - holds

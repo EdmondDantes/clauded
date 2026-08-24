@@ -5,7 +5,7 @@ collects questions onto a map and does nothing until Edmond presses Apply.
 
 ## Fog
 
-- Whether a map should ever be regenerated automatically, or only on request.
+Nothing open. A question that returns is written as a step, not as a line here.
 
 ## S1 — The page  [done]
 
@@ -50,13 +50,34 @@ collects questions onto a map and does nothing until Edmond presses Apply.
 - [x] S3.7 Hold the conversation without the main session
       done: a background subagent runs wait → reply → wait and survives terminal input; seen running while Edmond typed
       handoff: the Stop hook only fires at the end of a turn, so an idle session never reacts on its own
-- [ ] S3.8 The channel, so no agent has to be held open at all
-      done: a message on the map wakes a session that is not in a turn
+- [~] S3.8 A line nobody read is answered by a session started for it
+      done: a line written while every session is idle is answered on the map
+        within a minute, and no agent was held open waiting for it
       tier: T2
-      blocked: the CLI exposes no channel. Checked on 2026-08-24 against Claude
-        Code 2.1.241: `claude --help` and `claude mcp --help` name no channel
-        flag, and neither settings file mentions one. Until it appears, the Stop
-        hook and a background subagent are what reach an idle session.
+      note: waking the session Edmond is looking at cannot be done from here.
+        Claude Code 2.1.241 has no channel — no flag in `claude --help` or
+        `claude mcp --help`, nothing in either settings file — and the kernel
+        refuses the other route: `dev.tty.legacy_tiocsti = 0`, so nothing may
+        type into the terminal on his behalf. What is possible is the other half
+        of the problem: `claude -p` runs and answers (checked). So the server
+        watches its maps, and a line that no session has taken within
+        ANSWER_AFTER seconds is answered by a session started for that line
+        alone, with only the map's tools allowed and nothing of the project
+        writable. Off unless `CLAUDED_ANSWER=claude` is set: a session that
+        spends tokens while nobody watches is Edmond's decision.
+      left: the live run. Starting a server that spawns `claude` is refused by
+        the permission classifier from inside a session, so the check is one
+        command in a terminal — see the handoff.
+
+- [x] S3.9 A map is rebuilt on request, never by itself
+      done: nothing regenerates a map without being asked
+      tier: T1 · role: —
+      handoff: this was a line in the Fog and is now decided. A map that rebuilt
+        itself when a source document changed would rewrite the YAML under an
+        open conversation, move nodes while they are being read, and — worse —
+        a regenerated id orphans the answers and the settled marks keyed to it.
+        The page already regrows the graph when the file changes, which is the
+        part worth having.
 
 ## S5 — One conversation  [done]
 

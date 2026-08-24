@@ -182,11 +182,16 @@ the server records it removes on the way out.
   project's state files are shared, and a write merges rather than overwrites —
   two sessions on one project talk into one conversation, not two.
 - **Nothing wakes an idle session.** A session that is not in a turn hears
-  nothing until its next turn ends; the Stop hook is the reverse channel, and a
-  channel that pushes into an idle session does not exist here yet. The hook
-  also delivers at most one batch per turn — a turn the hook itself started
-  carries `stop_hook_active` and leaves the map alone, so the line after it waits
-  for the next thing you type.
+  nothing until its next turn ends; the Stop hook is the reverse channel, and
+  Claude Code offers no way to push into an idle one. The hook also delivers at
+  most one batch per turn — a turn the hook itself started carries
+  `stop_hook_active` and leaves the map alone, so the line after it waits for the
+  next thing you type.
+
+  Set `CLAUDED_ANSWER=claude` and the server answers instead of waiting: a line
+  that no session has taken within half a minute gets a session started for it,
+  allowed only the map's own tools and nothing of the project. It costs tokens
+  without you watching, which is why it is off by default.
 - **A citation is only as unique as its anchor.** A symbol renamed while a new
   one takes the old name, or an anchor line that reappears elsewhere as it
   vanishes here, still misleads. Everything short of that is caught: a citation

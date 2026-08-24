@@ -17,6 +17,7 @@ import fcntl
 import itertools
 import json
 import os
+import subprocess
 import threading
 import time
 from datetime import datetime, timezone
@@ -846,6 +847,119 @@ class Handler(BaseHTTPRequestHandler):
         self.json_reply(200, {"ok": True})
 
 
+# How long a line waits for a session that is in a turn before a session is
+# started to answer it. Long enough for the Stop hook of a running turn to take
+# it first: that answer comes from the session Edmond is actually talking to.
+ANSWER_AFTER = 25.0
+
+# The command that answers, and the switch that allows it. Off unless asked for:
+# a session started to answer spends tokens with nobody watching, and that is
+# Edmond's call rather than the server's. `CLAUDED_ANSWER=claude` turns it on.
+ANSWER_WITH = os.environ.get("CLAUDED_ANSWER")
+
+ANSWER_PROMPT = """A line was written on the design map "{name}" of this project and nobody read it: \
+the session that opened the map is idle, so you were started to answer that line.
+
+The line{about}: {text}
+
+Answer on the map, not here. Read it with read_map, answer with reply_on_map — passing `node` when \
+the line is about one — and use resolve_on_map only when the line settles a question. Keep the answer \
+short and in Russian, and say plainly when you do not know. Then stop: do not wait for more, and do \
+not change any file of the project."""
+
+
+def unanswered(snapshot):
+    """The oldest line of the reader's that Claude has not been given, or None."""
+    handed = set(snapshot.get("handed") or [])
+    mine = [m for m in snapshot["chat"] if m["role"] == "you" and m["id"] not in handed]
+    return mine[0] if mine else None
+
+
+def written_when(message):
+    """When a line was written, in seconds since the epoch; 0 when it does not say."""
+    try:
+        return datetime.fromisoformat(str(message.get("at"))).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def answer_with_claude(root, name, message):
+    """
+    Starts a session whose whole job is to answer one line on the map.
+
+    A hook fires at the end of a turn, and a session sitting idle has no turn to
+    end — so a line written while nobody works reaches nobody. Rather than hold
+    an agent open in case something is written, one is started because something
+    was. Returns the process, or None when answering is switched off.
+    """
+    if not ANSWER_WITH:
+        return None
+
+    about = f" is about the node {message['about']}" if message.get("about") else ""
+    prompt = ANSWER_PROMPT.format(name=name, about=about, text=message.get("text", ""))
+    tools = ",".join(f"mcp__plugin_clauded_clauded__{tool}" for tool in
+                     ("read_map", "read_state", "open_questions", "reply_on_map",
+                      "select_on_map", "resolve_on_map"))
+
+    try:
+        return subprocess.Popen(
+            [ANSWER_WITH, "-p", prompt, "--allowedTools", tools],
+            cwd=str(root),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError:
+        return None
+
+
+class Answerer(threading.Thread):
+    """
+    Watches the maps of a project and answers what no session took.
+
+    One at a time, and only when nothing is waiting on the map: a second session
+    started while the first still writes would answer the same conversation
+    twice, and neither would know of the other.
+    """
+
+    def __init__(self, board, root):
+        super().__init__(name="clauded-answerer", daemon=True)
+        self.board = board
+        self.root = root
+        self.working = None
+
+    def run(self):
+        while ANSWER_WITH:
+            time.sleep(5.0)
+            try:
+                self.round()
+            except Exception:
+                # The map works with or without this; a watcher that dies here
+                # must not take the server with it.
+                continue
+
+    def round(self):
+        if self.working is not None and self.working.poll() is None:
+            return
+
+        for state in self.board.opened(self.root):
+            snapshot = state.snapshot()
+            if snapshot["listeners"] or snapshot["ended"]:
+                continue
+
+            waiting = unanswered(snapshot)
+            if waiting is None or time.time() - written_when(waiting) < ANSWER_AFTER:
+                continue
+
+            # Taking the line through the inbox is what marks it answered: the
+            # session started below reads it from its prompt, not from the map.
+            state.inbox()
+            self.working = answer_with_claude(self.root, state.name, waiting)
+            state.touch()
+            return
+
+
 PORT_TRIES = 12
 
 
@@ -878,6 +992,8 @@ def start(root=".", port=8791):
 
     thread = threading.Thread(target=server.serve_forever, name="clauded-http", daemon=True)
     thread.start()
+
+    Answerer(board, Path(root)).start()
 
     url = f"http://127.0.0.1:{port}"
     announce(url, root)
