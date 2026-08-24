@@ -771,7 +771,8 @@
   /* State lives on a stripe down the left edge, so the plate's own outline is
      free to mean selection and hover alone. */
   .node .state { display: none; width: 3px; }
-  .node.answered .state, .node.settled .state, .node.unread .state, .node.fresh .state { display: block; }
+  .node.answered .state, .node.settled .state, .node.unread .state,
+  .node.fresh .state, .node.touched .state { display: block; }
   .node.answered .state { fill: var(--open); }
   .node.settled .state { fill: var(--decided); }
   .node.unread .state { fill: var(--accent); }
@@ -780,8 +781,9 @@
   .node.fresh .state { fill: var(--ink); }
 
   /* A node rewritten in place says so on its stripe alone: it was already on
-     the map, and dropping it in again would read as a second arrival. */
-  .node.touched .state { display: block; fill: var(--accent); }
+     the map, and dropping it in again would read as a second arrival. The muted
+     ink keeps it apart from unread, which takes the accent. */
+  .node.touched .state { fill: var(--ink-muted); }
 
   .node.settled .mark { fill: var(--decided); stroke: var(--decided); }
 
@@ -1542,15 +1544,24 @@ function childrenOf(edges) {
 }
 
 /**
- * Assigns a column by kind and stacks each column top to bottom, then lifts
- * every aspect to the vertical centre of the children it owns. Writes x and y
- * onto the nodes and returns the drawing bounds, used to fit the view.
+ * Places every node: a column from `columnsOf`, a vertical order within the
+ * column taken from where its parents stand, then each node centred against the
+ * children it points at, with the column pushed apart again where centring
+ * overlapped it. Writes x and y onto the nodes and returns the drawing bounds,
+ * used to fit the view.
  */
 function layout(nodes, edges) {
   const shown = new Set(nodes.map(node => node.id));
   const children = childrenOf(edges);
   const parents = parentsOf(edges);
   const column = columnsOf(nodes, parents);
+
+  // Every position is written from scratch: a barycentre taken from the y of a
+  // previous call would make the picture depend on how often it was drawn.
+  for (const node of nodes) {
+    node.x = undefined;
+    node.y = undefined;
+  }
 
   const width = nodes.length ? Math.max(...nodes.map(node => column.get(node.id))) + 1 : 1;
   const lanes = Array.from({ length: width }, () => []);
@@ -2471,7 +2482,10 @@ function updateApply() {
   // hand over again: pressing Finish twice would replay the whole log, or hand
   // over an empty one. The flag is set the moment Finish is pressed, because
   // the line that records it only comes back from the server a poll later.
-  const closed = handedOver && count === 0;
+  // Two ways to know the round was handed over: the flag, which is immediate and
+  // works without a server, and the line Apply wrote, which survives a reload.
+  const last = pending.chat[pending.chat.length - 1];
+  const closed = (handedOver || Boolean(last && last.kind === "finish")) && count === 0;
   const label = count ? `Finish · ${count} to hand over` : closed ? "Handed over" : "Finish";
   button.disabled = closed;
   // Rewriting the same text on every poll made the button flicker.
@@ -2485,7 +2499,8 @@ function updateApply() {
  * and the reader pastes it into the conversation.
  */
 async function applyPending() {
-  if (handedOver && pendingCount() === 0) return;
+  const written = pending.chat[pending.chat.length - 1];
+  if ((handedOver || Boolean(written && written.kind === "finish")) && pendingCount() === 0) return;
   handedOver = true;
 
   const lines = [`# ${MAP.title}`];

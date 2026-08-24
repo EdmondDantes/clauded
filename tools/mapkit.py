@@ -68,7 +68,7 @@ def vocabulary(spec):
     and the map is then checked against every kind instead of its own.
     """
     known = DESIGN_KINDS | ARCHITECTURE_KINDS
-    words = re.split(r"[^a-z]+", (spec or {}).get("nodes", "").lower())
+    words = re.split(r"[^a-z]+", str((spec or {}).get("nodes") or "").lower())
     return {word for word in words if word in known}
 
 

@@ -14,6 +14,7 @@ this is one person's tool, not a service.
 
 import atexit
 import fcntl
+import itertools
 import json
 import os
 import threading
@@ -31,17 +32,21 @@ import mapkit
 
 STATE_DIR = ".clauded"
 
+# Everything this tool keeps outside a project. CLAUDED_HOME moves it, which is
+# how the tests keep their servers and their last root out of the real one.
+HOME = Path(os.environ.get("CLAUDED_HOME") or Path.home() / STATE_DIR)
+
 # Where a running server leaves its address, one file per process. The Stop hook
 # reads this directory and picks the server of its own session: a single file
 # would be overwritten by whichever session started last, and the hook of the
 # first would then drain the map of the second.
-SERVERS = Path.home() / STATE_DIR / "servers"
+SERVERS = HOME / "servers"
 
 # The project the last server served. A reloaded plugin starts the server again
 # in the directory Claude Code was launched in, which is often not the project
 # holding the maps, and a page open on the old server would then be told its map
 # does not exist.
-LAST_ROOT = Path.home() / STATE_DIR / "last-root"
+LAST_ROOT = HOME / "last-root"
 MAX_BODY = 1 << 20
 
 # How much of a cited file the code window may ask for. A generated file runs to
@@ -53,33 +58,26 @@ SOURCE_LINES = 4000
 # to one map leaves the pages of the others alone.
 GENERATION = {}
 
+# Tells apart two states built in one process. The clock and the pid are the same
+# for both, and two lines minted with one id are read by the merge as one line.
+ORIGINS = itertools.count(1)
+
 
 def map_changed(name):
     GENERATION[name] = GENERATION.get(name, 0) + 1
 
 
-def running():
-    """
-    Every map server alive on this machine: the records, dead ones removed.
-
-    A record names the session that started the server, when there was one —
-    a server started by hand from serve.py has none.
-    """
+def sweep():
+    """Removes the record of every server that is no longer running."""
     if not SERVERS.is_dir():
-        return []
+        return
 
-    alive = []
     for path in sorted(SERVERS.glob("*.json")):
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
             os.kill(int(record["pid"]), 0)
         except (OSError, ValueError, KeyError):
             path.unlink(missing_ok=True)
-            continue
-
-        alive.append(record)
-
-    return alive
 
 
 def announce(url, root):
@@ -90,9 +88,14 @@ def announce(url, root):
     The session id comes from the environment Claude Code gives an MCP server it
     starts; the hook has the same id in its own input, and that is what pairs the
     two. The record is removed when the process ends.
+
+    A project holding maps is also written to LAST_ROOT, where the next server
+    started somewhere mapless will read it.
     """
     SERVERS.mkdir(parents=True, exist_ok=True)
-    running()
+    sweep()
+    # Written by every version up to 0.13.0 and read by nobody since.
+    (HOME / "server.json").unlink(missing_ok=True)
 
     record = {
         "url": url,
@@ -132,6 +135,21 @@ def project_root(asked):
         return Path(asked)
 
     return remembered if maps_in(remembered) else Path(asked)
+
+
+def written_at(message):
+    """
+    The order two servers put the same conversation in.
+
+    The time a line carries is written to the second, so lines of one second sort
+    by who minted them and in what order — an id is "<origin>-<number>", and the
+    number compared as text puts 10 before 9.
+    """
+    origin, _, number = str(message.get("id") or "").rpartition("-")
+    try:
+        return (str(message.get("at")), origin, int(number))
+    except ValueError:
+        return (str(message.get("at")), str(message.get("id")), 0)
 
 
 def maps_in(root):
@@ -200,7 +218,7 @@ class State:
         # remembers more than the server does can still tell what is new.
         # The pid keeps two servers started in the same second from minting the
         # same message ids.
-        self.origin = f"{int(time.time())}-{os.getpid()}"
+        self.origin = f"{int(time.time())}-{os.getpid()}-{next(ORIGINS)}"
         self.counter = 0
         self._restore()
 
@@ -261,7 +279,7 @@ class State:
             if isinstance(message, dict) and message.get("id") not in known:
                 self.chat.append(message)
 
-        self.chat.sort(key=lambda message: (str(message.get("at")), str(message.get("id"))))
+        self.chat.sort(key=written_at)
         self.counter = max(self.counter, len(self.chat))
         self.handed |= set(theirs.get("handed") or [])
 
@@ -532,9 +550,9 @@ class State:
             with open(guard, "a+", encoding="utf-8") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
                 try:
-                    with self.lock:
-                        self._sync()
-                        payload = json.dumps(self.snapshot(), ensure_ascii=False, indent=2)
+                    # snapshot() takes in whatever another server wrote before
+                    # it answers, so what is written here is the union.
+                    payload = json.dumps(self.snapshot(), ensure_ascii=False, indent=2)
 
                     temporary = self.file().with_suffix(".writing")
                     temporary.write_text(payload, encoding="utf-8")

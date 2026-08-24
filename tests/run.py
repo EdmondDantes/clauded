@@ -19,6 +19,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# Everything the servers keep outside a project goes to a directory of its own:
+# a run must not point a live session at a fixture it is about to delete. Set
+# before the server is imported, because that is when it reads the variable.
+os.environ.setdefault("CLAUDED_HOME", tempfile.mkdtemp(prefix="clauded-home-"))
+
 HERE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE / "tools"))
 sys.path.insert(0, str(HERE / "server"))
@@ -201,7 +206,9 @@ def finish_is_one_signal(root):
     live.post("/api/apply", {"map": "alpha", "summary": "# four\n- you: done", "answers": {}, "chat": []})
     hook = subprocess.run([sys.executable, str(HERE / "hooks" / "map-inbox.py")],
                           input=json.dumps({"session_id": SESSION}), capture_output=True, text=True, timeout=10)
-    reason = json.loads(hook.stdout)["hookSpecificOutput"]["reason"]
+    said = json.loads(hook.stdout)
+    check("the hook blocks the stop", said.get("decision"), "block")
+    reason = said["reason"]
     check("with nobody waiting, the hook says it", reason.splitlines()[0].startswith("Edmond pressed Finish"), True)
     check("and prints the draft", "    - you: done" in reason, True)
     session.server.shutdown()
@@ -335,7 +342,9 @@ def two_sessions_do_not_cross(root):
             hook = subprocess.run([sys.executable, str(HERE / "hooks" / "map-inbox.py")],
                                   input=json.dumps({"session_id": session}), capture_output=True,
                                   text=True, timeout=10)
-            reason = json.loads(hook.stdout)["hookSpecificOutput"]["reason"]
+            said = json.loads(hook.stdout)
+            check(f"the hook of {session} blocks", said.get("decision"), "block")
+            reason = said["reason"]
             check(f"the hook of {session} takes its own line", f"written for {session}" in reason, True)
             other = "tests-b" if session == "tests-a" else "tests-a"
             check(f"and not {other}'s", f"written for {other}" in reason, False)

@@ -17,7 +17,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SERVERS = Path.home() / ".clauded" / "servers"
+SERVERS = Path(os.environ.get("CLAUDED_HOME") or Path.home() / ".clauded") / "servers"
 TIMEOUT = 2
 
 
@@ -122,10 +122,12 @@ def main():
         about = f" (about {message['about']})" if message.get("about") else ""
         lines.append(f"- {where}{message['text']}{about}")
 
-    # The decision travels twice: `hookSpecificOutput` is what the current
-    # version reads, and the flat pair is the older shape. The wrong field name
-    # costs the message itself — the inbox is drained either way, and a line
-    # nobody was handed is a line Edmond wrote to nobody.
+    # The decision travels twice. Claude Code 2.1.241 blocks on the flat
+    # `decision`/`reason` pair alone; the Stop branch of `hookSpecificOutput` is
+    # declared with `additionalContext` and nothing else, so the copy nested
+    # there is stripped and costs only its own bytes. The wrong field name costs
+    # the message itself — the inbox is drained either way, and a line nobody
+    # was handed is a line Edmond wrote to nobody.
     reason = "\n".join(lines)
     print(json.dumps({
         "decision": "block",

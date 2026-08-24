@@ -241,12 +241,19 @@ class Session:
             return self.board, self.url
 
     def use(self, root):
-        """Points the session at another project; returns the root in force."""
+        """
+        Points the session at another project; returns the root in force.
+
+        The running server's record follows, so the Stop hook and the next start
+        both name the project actually being served rather than the one adopted
+        when the process began.
+        """
         with self.lock:
             if root:
                 self.root = Path(root).expanduser().resolve()
                 if self.server is not None:
                     self.server.root = self.root
+                    maps.announce(self.url, self.root)
             return self.root
 
 

@@ -183,7 +183,10 @@ the server records it removes on the way out.
   two sessions on one project talk into one conversation, not two.
 - **Nothing wakes an idle session.** A session that is not in a turn hears
   nothing until its next turn ends; the Stop hook is the reverse channel, and a
-  channel that pushes into an idle session does not exist here yet.
+  channel that pushes into an idle session does not exist here yet. The hook
+  also delivers at most one batch per turn — a turn the hook itself started
+  carries `stop_hook_active` and leaves the map alone, so the line after it waits
+  for the next thing you type.
 - **Citations are line numbers.** An edit above a cited range moves it, and the
   map keeps pointing where the code used to be.
 
