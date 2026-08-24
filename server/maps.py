@@ -315,14 +315,26 @@ class State:
 
         return fresh
 
-    def conversation(self):
+    def conversation(self, since=None):
         """
-        The whole conversation, both sides.
+        The conversation after the message `since`, or all of it when `since` is
+        None or names a message this server does not hold.
 
         The page keeps its own copy of what it sent, but a second window — or a
-        phone — sent lines this one never saw, so everything travels.
+        phone — sent lines this one never saw, so everything travels until the
+        page says how far it has got. An unknown id means the two are out of
+        step — a restarted server, a page open since yesterday — and the whole
+        log is the only safe answer.
         """
-        return self.snapshot()["chat"]
+        chat = self.snapshot()["chat"]
+        if since is None:
+            return chat
+
+        for index, message in enumerate(chat):
+            if message.get("id") == since:
+                return chat[index + 1:]
+
+        return chat
 
     def update(self, **fields):
         with self.lock:
@@ -389,6 +401,10 @@ class Handler(BaseHTTPRequestHandler):
     def asked_map(self):
         """The map named in the query string; empty when the request names none."""
         return (parse_qs(urlsplit(self.path).query).get("map") or [""])[0].strip("/")
+
+    def asked_since(self):
+        """The last message id the page holds, or None when it holds none."""
+        return (parse_qs(urlsplit(self.path).query).get("since") or [""])[0] or None
 
     def state_for(self, name):
         """
@@ -482,7 +498,7 @@ class Handler(BaseHTTPRequestHandler):
                 "ended": snapshot["ended"],
                 "focus": snapshot["focus"],
                 "resolved": snapshot["resolved"],
-                "chat": state.conversation(),
+                "chat": state.conversation(self.asked_since()),
             })
             return
 
@@ -497,7 +513,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         try:
-            _, page = mapkit.build(source, root, coloured=True)
+            _, page = mapkit.build(source, root, coloured=True, stamp=self.map_stamp(name))
         except ValueError as error:
             problems = "".join(f"<li>{line}</li>" for line in str(error).splitlines())
             self.reply(422, f"<h1>{name} does not validate</h1><ul>{problems}</ul>")

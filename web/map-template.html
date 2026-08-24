@@ -1073,6 +1073,25 @@
     font-size: var(--step-0);
   }
 
+  .round-end {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: .3rem 0;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: var(--step-micro);
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--decided);
+  }
+
+  .round-end::before, .round-end::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
   .chat-options { display: flex; flex-wrap: wrap; gap: .3rem; }
 
   .chat-options button {
@@ -1469,6 +1488,11 @@ const MAP = {
 // dialect the server no longer speaks.
 const BUILD = "dev";
 
+// The stamp of the data this page was rendered from. The server writes it in;
+// opened as a file the page has none, and the first poll is what tells it where
+// it stands.
+const MAP_STAMP = "dev";
+
 // Which map this page is: the last part of /map/<name>, and the name every
 // request and every stored key carries. A project holds several maps, and they
 // share neither a conversation nor a window arrangement.
@@ -1651,7 +1675,7 @@ let nodeShapes = new Map();
 let selected = null;
 let waiting = null;
 let presence = "offline";
-let mapStamp = null;
+let mapStamp = MAP_STAMP === "dev" ? null : MAP_STAMP;
 const settled = new Map();
 const unread = new Set();
 
@@ -1671,9 +1695,18 @@ function loadPending() {
   }
 }
 
+// How much of the conversation the browser keeps. Applied lines are with Claude
+// and on the server, which hands back whatever this page is missing, so only the
+// tail of them is worth storing.
+const KEEP_LINES = 200;
+
 function savePending() {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(pending.chat));
+    // A line that has not been handed over exists nowhere else, so every one of
+    // them is kept; the rest are trimmed to the tail.
+    const kept = new Set(pending.chat.filter(message => !message.applied));
+    for (const message of pending.chat.slice(-KEEP_LINES)) kept.add(message);
+    localStorage.setItem(STORE_KEY, JSON.stringify(pending.chat.filter(message => kept.has(message))));
   } catch (error) {
     // Storage can be unavailable; losing the draft beats a broken page.
   }
@@ -2091,6 +2124,17 @@ function renderChat() {
 
   let lastSubject = null;
   for (const message of pending.chat) {
+    // Apply hands the round over and writes a summary of the lines above it.
+    // The log marks the handover and leaves the summary out: it is a repeat.
+    if (message.kind === "finish") {
+      const mark = document.createElement("div");
+      mark.className = "round-end";
+      mark.textContent = "Handed over";
+      log.append(mark);
+      lastSubject = null;
+      continue;
+    }
+
     if (message.about !== lastSubject && message.about && byId.has(message.about)) {
       const subject = document.createElement("button");
       subject.type = "button";
@@ -2707,11 +2751,19 @@ if (location.protocol === "http:" || location.protocol === "https:") {
   // both on a timer, opens the question it is asked about, and shows the reply.
   let asked = null;
   let ticking = false;
+  // The id of the newest line the server has handed over. It travels back as
+  // `since`, so a poll carries what this page is missing instead of the log.
+  let seenId = null;
+  // Said once when a new build is held back, so the reader knows why the page
+  // has not reloaded itself.
+  let held = false;
   setInterval(async () => {
     if (ticking) return;
     ticking = true;
     try {
-      const news = await fetch(`/api/updates?map=${encodeURIComponent(MAP_NAME)}`).then(response => response.json());
+      const from = seenId ? `&since=${encodeURIComponent(seenId)}` : "";
+      const news = await fetch(`/api/updates?map=${encodeURIComponent(MAP_NAME)}${from}`)
+        .then(response => response.json());
 
       // The map's own data changed — a node was added or settled while we
       // watched — so the graph on screen is out of date.
@@ -2723,6 +2775,16 @@ if (location.protocol === "http:" || location.protocol === "https:") {
       }
 
       if (news.build && BUILD !== "dev" && news.build !== BUILD) {
+        // A reload takes the box with it, and what is typed there exists
+        // nowhere else. The new build waits until the box is empty.
+        if (document.getElementById("chatField").value.trim()) {
+          if (!held) {
+            held = true;
+            toast("The page was rebuilt — it reloads once the box is empty");
+          }
+          return;
+        }
+
         toast("The map changed — reloading");
         setTimeout(() => location.reload(), 1200);
         return;
@@ -2737,6 +2799,7 @@ if (location.protocol === "http:" || location.protocol === "https:") {
       const known = new Set(pending.chat.flatMap(message =>
         [message.id, `${message.at}|${message.text}`].filter(Boolean)));
       const fresh = (news.chat || []).filter(message => !known.has(key(message)));
+      if (news.chat && news.chat.length) seenId = news.chat[news.chat.length - 1].id || seenId;
 
       if (fresh.length) {
         for (const message of fresh) {
@@ -2753,7 +2816,10 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 
           pending.chat.push({
             id: message.id, role: message.role, text: message.text,
-            about: message.about, at: message.at, applied: message.role === "you" ? undefined : true
+            about: message.about, at: message.at, kind: message.kind,
+            // The line Apply writes is the round handed over, not a line waiting
+            // to be: counting it as pending would ask for it back at once.
+            applied: message.role === "you" && message.kind !== "finish" ? undefined : true
           });
         }
 

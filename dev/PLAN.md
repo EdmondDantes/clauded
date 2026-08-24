@@ -54,6 +54,10 @@ collects questions onto a map and does nothing until Edmond presses Apply.
 - [ ] S3.8 The channel, so no agent has to be held open at all
       done: a message on the map wakes a session that is not in a turn
       tier: T2
+      blocked: the CLI exposes no channel. Checked on 2026-08-24 against Claude
+        Code 2.1.241: `claude --help` and `claude mcp --help` name no channel
+        flag, and neither settings file mentions one. Until it appears, the Stop
+        hook and a background subagent are what reach an idle session.
 
 ## S5 — One conversation  [done]
 
@@ -105,18 +109,37 @@ is escaped.
         defaulting to the map opened last. Checked with two maps in one project:
         chats, settled marks, stamps and state files stay apart, a restart brings
         each back, and the browser page shows only its own map's lines.
-- [ ] S6.2 The conversation grows without bound
+- [x] S6.2 The conversation grows without bound
       done: /api/updates serves from a given id, applied lines are trimmed on save
       tier: T1
-- [ ] S6.3 A restart loses what was applied and re-delivers the inbox
+      handoff: State.conversation takes `since` and answers what follows that
+        message; an id it does not hold means the two are out of step and the
+        whole log travels. The page sends the newest id it has and stores every
+        line not yet handed over plus the last 200. Measured in the browser: 302
+        lines saved down to 200 with both unsent ones kept. What is still
+        unbounded is the server's own log, in memory and in the state file.
+- [x] S6.3 A restart loses what was applied and re-delivers the inbox
       done: applied flags and delivered count survive a restart
       tier: T1
-- [ ] S6.4 The first poll accepts the stamp without comparing
+      handoff: nothing to fix — _restore already reads `delivered` and `applied`,
+        and `ended` is deliberately not restored. Proved rather than assumed:
+        three lines drained, a round finished, the server restarted; the three do
+        not travel again, the draft is still in `applied`, and the inbox holds
+        only the finish written after the drain.
+- [x] S6.4 The first poll accepts the stamp without comparing
       done: the map stamp is baked into the page at render, like the build stamp
       tier: T1
-- [ ] S6.5 A reload on a new build throws away a draft
+      handoff: mapkit.render takes `stamp` and writes it into MAP_STAMP; the
+        server passes the same string it answers with, so the first poll compares
+        instead of accepting. build-map.py passes none, and a page opened as a
+        file keeps the old behaviour. Checked against the server: the baked value
+        equals the one /api/updates reports.
+- [x] S6.5 A reload on a new build throws away a draft
       done: the page does not reload while a field holds text
       tier: T1
+      handoff: the poll holds the reload back while the compose box holds text and
+        says so once. Measured in the browser with a stubbed poll: the draft
+        survived, one toast was shown, and the page did not reload.
 
 ## S8 — The window Edmond works in  [done]
 
@@ -209,8 +232,9 @@ the same end, and no line is handed over twice.
         clears it when it delivers the finish, and a blocking call marks what it
         returned as delivered so the hook does not repeat it. POST /api/end is
         gone — nothing called it — and the .end-talk style with it.
-        Left for the page: it still shows the summary as an ordinary message and
-        says nothing about the round being closed.
+        The page marks the handover with a rule across the log and leaves the
+        summary out — it repeats the lines above it — and the finish no longer
+        counts as a line waiting to be handed over.
 
 ## S4 — The mode in the skill
 

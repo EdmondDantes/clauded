@@ -211,11 +211,21 @@ def build_stamp(template=None):
     return str(int(path.stat().st_mtime))
 
 
-def render(data, template=None):
-    """Substitutes the MAP literal, the title and the build stamp into the template."""
+def render(data, template=None, stamp=None):
+    """
+    Substitutes the MAP literal, the title, the build stamp and the map's own
+    stamp into the template.
+
+    `stamp` identifies the data this page was rendered from. The page compares
+    it with what the server reports and refetches when the two differ, so it has
+    to be the same string the server would answer with; left out, the page waits
+    for the first poll to tell it where it stands.
+    """
     path = Path(template or TEMPLATE)
     text = path.read_text(encoding="utf-8")
     text = text.replace('const BUILD = "dev";', f'const BUILD = "{build_stamp(path)}";', 1)
+    if stamp:
+        text = text.replace('const MAP_STAMP = "dev";', f'const MAP_STAMP = "{stamp}";', 1)
     # A "</script>" anywhere in the data would close the tag the literal sits in.
     literal = "const MAP = " + json.dumps(data, ensure_ascii=False, indent=2).replace("</", "<\\/") + ";"
     page, count = re.subn(r"const MAP = \{.*?\n\};", lambda _: literal, text, count=1, flags=re.S)
@@ -227,7 +237,7 @@ def render(data, template=None):
     return re.sub(r"<title>.*?</title>", f"<title>{html.escape(data['title'])}</title>", page, count=1, flags=re.S)
 
 
-def build(path, root=".", coloured=False, template=None):
+def build(path, root=".", coloured=False, template=None, stamp=None):
     """Loads, checks and renders one map. Raises ValueError listing every problem."""
     data = load(path)
     problems = validate(data)
@@ -236,4 +246,4 @@ def build(path, root=".", coloured=False, template=None):
     if problems:
         raise ValueError("\n".join(problems))
 
-    return data, render(data, template)
+    return data, render(data, template, stamp)
