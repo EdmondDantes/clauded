@@ -42,11 +42,26 @@ def main():
     if not messages:
         return
 
-    lines = ["Edmond wrote on the map. Answer with reply_on_map, then keep working:"]
+    # Finish is not one more remark: it ends the round, and the turn that hears
+    # about it has to stop asking rather than answer.
+    ending = any(message.get("kind") == "finish" for message in messages)
+    lines = [
+        "Edmond pressed Finish on the map: the round is over. Take what is below as "
+        "handed over, stop asking, and report."
+        if ending else
+        "Edmond wrote on the map. Answer with reply_on_map, then keep working:"
+    ]
+
     for message in messages:
         # A project holds several maps and the sweep drains them all, so a line
         # says which map it was written on and reply_on_map can name it back.
         where = f"[{message['map']}] " if message.get("map") else ""
+
+        if message.get("kind") == "finish":
+            lines.append(f"- {where}FINISH — what he handed over:")
+            lines.extend(f"    {row}" for row in message["text"].splitlines())
+            continue
+
         about = f" (about {message['about']})" if message.get("about") else ""
         lines.append(f"- {where}{message['text']}{about}")
 

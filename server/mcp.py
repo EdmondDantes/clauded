@@ -293,6 +293,19 @@ def tool_read_state(session, args):
     return json.dumps(state.snapshot(), ensure_ascii=False, indent=2)
 
 
+# What every waiting call says when the reader presses Finish. One wording, so
+# the end of a round reads the same whichever call was blocked on it.
+FINISHED = (
+    "Edmond pressed Finish: the round is over. Stop waiting and stop asking. "
+    "What he handed over is in `applied` — read_state, or the answer of wait_for_apply."
+)
+
+
+def end_of_round(state):
+    """True when the round has just ended; takes the signal so it is told once."""
+    return state.take_end()
+
+
 def said_by_reader(snapshot, seen):
     """The reader's messages beyond the ones already counted."""
     mine = [m for m in snapshot["chat"] if m["role"] == "you"]
@@ -449,12 +462,27 @@ def tool_ask_on_map(session, args):
 
     seen = len([m for m in state.snapshot()["chat"] if m["role"] == "you"])
     state.update(focus={"node": node, "note": args.get("note", "")})
-    fresh = state.wait_for(lambda snap: said_by_reader(snap, seen), timeout)
+
+    def answer(snapshot):
+        # The end of the round outranks anything said in it: the last line Apply
+        # writes is a summary of the round, not an answer to this question.
+        if snapshot["ended"]:
+            return "ended"
+        return said_by_reader(snapshot, seen)
+
+    fresh = state.wait_for(answer, timeout)
+
+    if fresh == "ended":
+        end_of_round(state)
+        state.mark_delivered()
+        state.update(focus=None)
+        return FINISHED
 
     if fresh is None:
         state.update(focus=None)
         return f"Nothing said about {node} within {timeout:.0f}s. It is still open on the map at {url}/map/{name}."
 
+    state.mark_delivered()
     return json.dumps({"asked": node, "said": [{"text": m["text"], "about": m["about"]} for m in fresh]}, ensure_ascii=False)
 
 
@@ -470,11 +498,13 @@ def tool_wait_for_message(session, args):
 
     fresh = state.wait_for(next_line, timeout)
     if fresh == "ended":
-        state.update(ended=False)
-        return "The reader ended the conversation. Stop waiting and report."
+        end_of_round(state)
+        state.mark_delivered()
+        return FINISHED
     if fresh is None:
         return f"Nothing said on the map within {timeout:.0f}s. It is still open at {url}/map/{name}."
 
+    state.mark_delivered()
     return json.dumps(
         [{"text": m["text"], "about": m["about"], "at": m["at"]} for m in fresh],
         ensure_ascii=False,

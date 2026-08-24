@@ -200,24 +200,17 @@ class State:
                     return None
                 self.lock.wait(min(1.0, left))
 
-    def add_message(self, role, text, about=None):
+    def add_message(self, role, text, about=None, kind="line"):
         """
         Appends one line to the single conversation and wakes whoever waits.
 
         `about` is the node selected when the line was written — the subject, not
-        a separate thread: one chat is easier to follow than a dozen.
+        a separate thread: one chat is easier to follow than a dozen. `kind` is
+        "line" for anything said and "finish" for the one the round ends with, so
+        a reader of the chat tells the end from a remark about it.
         """
         with self.lock:
-            self.counter += 1
-            message = {
-                "id": f"{self.origin}-{self.counter}",
-                "role": role,
-                "text": text,
-                "about": about,
-                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            }
-
-            self.chat.append(message)
+            message = self._append(role, text, about, kind)
             # An answer settles the question Claude pointed at, so the pointer
             # goes away and the page stops showing it as waited on.
             if role == "you" and self.focus and (about is None or self.focus.get("node") == about):
@@ -229,6 +222,70 @@ class State:
 
         self._persist()
         return message
+
+    def _append(self, role, text, about, kind):
+        """Puts one line in the conversation. The caller holds the lock."""
+        self.counter += 1
+        message = {
+            "id": f"{self.origin}-{self.counter}",
+            "role": role,
+            "text": text,
+            "about": about,
+            "kind": kind,
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        self.chat.append(message)
+        return message
+
+    def finish(self, payload, summary):
+        """
+        Ends the round: keeps the draft, raises the flag and writes the summary
+        into the conversation.
+
+        The three happen under one lock and wake the waiters once, so a call
+        blocked on the conversation cannot see the summary before the flag and
+        answer a finished round as though it were still running.
+        """
+        with self.lock:
+            self.applied = payload
+            self.focus = None
+            self.ended = True
+            message = self._append("you", summary, None, "finish")
+            self.version += 1
+            self.lock.notify_all()
+
+        self._persist()
+        return message
+
+    def take_end(self):
+        """
+        Reports the end of the round once and forgets it.
+
+        The end is a signal, not a state: the first caller to ask is told, and a
+        call that starts afterwards waits for the next Finish instead of hearing
+        this one again.
+        """
+        with self.lock:
+            if not self.ended:
+                return False
+            self.ended = False
+            self.version += 1
+            self.lock.notify_all()
+
+        self._persist()
+        return True
+
+    def mark_delivered(self):
+        """
+        Counts every line the reader has written as handed over.
+
+        A blocking call returns the lines itself, and without this the Stop hook
+        hands the same lines over again when the turn ends.
+        """
+        with self.lock:
+            self.delivered = len([m for m in self.chat if m["role"] == "you"])
+
+        self._persist()
 
     def resolve(self, node, note):
         """Marks a question settled, so the page stops asking for it."""
@@ -247,6 +304,11 @@ class State:
             mine = [m for m in self.chat if m["role"] == "you"]
             fresh = mine[self.delivered:]
             self.delivered = len(mine)
+            # Handing the finish over spends the signal, the same way a waiting
+            # call spends it: the end is told once, and a wait that starts after
+            # belongs to the next round.
+            if any(message.get("kind") == "finish" for message in fresh):
+                self.ended = False
 
         if fresh:
             self._persist()
@@ -511,7 +573,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = unquote(self.path.split("?")[0])
-        known = {"/api/apply", "/api/selection", "/api/message", "/api/end"}
+        known = {"/api/apply", "/api/selection", "/api/message"}
         if path not in known:
             self.json_reply(404, {"error": "unknown endpoint"})
             return
@@ -533,17 +595,13 @@ class Handler(BaseHTTPRequestHandler):
 
         payload["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-        if path == "/api/end":
-            state.add_message("you", payload.get("text") or "Разговор закончен.", payload.get("about"))
-            state.update(ended=True, focus=None)
-        elif path == "/api/selection":
+        if path == "/api/selection":
             state.update(selection=payload)
         elif path == "/api/message":
             state.add_message("you", payload.get("text", ""), payload.get("about"))
         else:
             # Apply is the end of the round: whoever waits stops waiting.
-            state.add_message("you", payload.get("summary") or "Работа принята.", None)
-            state.update(applied=payload, focus=None, ended=True)
+            state.finish(payload, payload.get("summary") or "Работа принята.")
 
         self.json_reply(200, {"ok": True})
 

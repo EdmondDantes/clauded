@@ -77,6 +77,12 @@ With the plugin's MCP server running, the loop is:
    Edmond types in the terminal, because that interrupts the turn.
 5. `wait_for_apply` when the questions are done. Work starts on what it returns,
    and not before.
+6. Finish ends the round and reaches you as one signal wherever you are: a
+   waiting `ask_on_map` or `wait_for_message` returns "Edmond pressed Finish",
+   and a turn that waits on nothing hears it from the Stop hook with the draft
+   printed under it. Whoever hears it first spends it, so it is said once — stop
+   asking, take the draft from `applied` (`read_state`, or what `wait_for_apply`
+   returns) and report.
 
 A project can hold several maps, and each keeps its own conversation: a reply
 written on one is not on the other. Every tool takes `name` and falls back to

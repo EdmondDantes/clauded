@@ -191,6 +191,27 @@ keeps its own conversation.
         the running server: both maps listed, the open one marked, /map/architecture
         answers 200.
 
+## S10 — The end of the round  [done]
+
+Goal: Finish reaches the agent as one unmistakable signal, whatever the agent
+was doing at the time.
+Done when: a waiting call, an idle turn's Stop hook and `read_state` all report
+the same end, and no line is handed over twice.
+
+- [x] S10.1 Finish is a signal, not one more line in the chat
+      done: every waiting call answers the end in the same words, the Stop hook
+        names it and prints the draft, and the signal is spent once
+      tier: T2 · role: —
+      handoff: State.finish keeps the draft, raises the flag and writes the
+        summary under one lock, so a call woken by the summary cannot answer a
+        finished round as a running one; the message carries kind "finish".
+        take_end hands the flag to the first caller and clears it, the inbox
+        clears it when it delivers the finish, and a blocking call marks what it
+        returned as delivered so the hook does not repeat it. POST /api/end is
+        gone — nothing called it — and the .end-talk style with it.
+        Left for the page: it still shows the summary as an ordinary message and
+        says nothing about the round being closed.
+
 ## S4 — The mode in the skill
 
 - [x] S4.1 Architecture map vocabulary against a real project
