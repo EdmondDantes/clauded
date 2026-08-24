@@ -97,3 +97,37 @@ before asking the next.
 
 Without the server, the same loop runs through the chat, and Apply puts the
 threads on the clipboard for Edmond to paste.
+
+## Holding the conversation with a subagent
+
+A blocking call in the main session dies the moment Edmond types in the
+terminal. To keep a conversation running while he works on the page, launch a
+background subagent whose whole job is the loop: `wait_for_message`, then
+`reply_on_map`, then wait again, until Finish ends the round.
+
+Give it the map's name, the address of the page already open — so it does not
+call `open_map` and raise a second window — and enough of the current work to
+answer without asking. The plugin's tools are deferred, so it loads them itself:
+
+```
+ToolSearch("select:mcp__plugin_clauded_clauded__wait_for_message,mcp__plugin_clauded_clauded__reply_on_map,mcp__plugin_clauded_clauded__add_node")
+```
+
+**Allow the writing tools before it starts.** Edmond asks the agent he is
+talking to for a node on the map, not for a note about one, and a subagent that
+may only read is stopped by the permission classifier before the call reaches
+the plugin — the refusal arrives as a bare "Blocked by classifier", so the agent
+cannot even explain what was refused. These belong in `permissions.allow`:
+
+```
+mcp__plugin_clauded_clauded__add_node
+mcp__plugin_clauded_clauded__edit_node
+mcp__plugin_clauded_clauded__remove_node
+mcp__plugin_clauded_clauded__resolve_on_map
+mcp__plugin_clauded_clauded__reply_on_map
+mcp__plugin_clauded_clauded__select_on_map
+```
+
+The subagent writes the map and nothing else: the repository is the main
+session's work, and a node written from a conversation is the record of that
+conversation.
