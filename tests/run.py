@@ -392,6 +392,20 @@ def the_old_state_is_inherited(root):
     live.stop()
 
 
+def the_page_declares_each_name_once(root):
+    """No two functions of the page share a name."""
+    import collections
+    import re
+
+    script = (HERE / "web" / "map-template.html").read_text(encoding="utf-8")
+    names = re.findall(r"^function (\w+)\(", script, re.M)
+    twice = [name for name, count in collections.Counter(names).items() if count > 1]
+    # The later declaration silently wins, and the call sites of the first one
+    # then pass the wrong arguments to the wrong function. It happened: a helper
+    # named `mark` took the name of the one that draws a node's marker.
+    check("every function is declared once", twice, [])
+
+
 def main():
     os.environ["CLAUDE_CODE_SESSION_ID"] = SESSION
 
@@ -399,7 +413,7 @@ def main():
                 a_line_written_while_claude_works, the_pipe_serves_more_than_one,
                 a_map_holds_its_own_vocabulary, a_write_can_be_checked,
                 two_sessions_do_not_cross, two_servers_on_one_project,
-                the_old_state_is_inherited):
+                the_old_state_is_inherited, the_page_declares_each_name_once):
         print(f"\n--- {run.__doc__.splitlines()[0]}")
         root = Path(tempfile.mkdtemp(prefix="clauded-test-"))
         try:

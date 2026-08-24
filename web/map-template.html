@@ -2431,15 +2431,16 @@ const touched = new Map();
 const FRESH_FOR = 8000;
 
 function markFresh(id) {
-  mark(fresh, id);
+  remember(fresh, id);
 }
 
 /** A node that was already there and has just been rewritten. */
 function markTouched(id) {
-  mark(touched, id);
+  remember(touched, id);
 }
 
-function mark(register, id) {
+/** Holds a node in one of the two registers for as long as the mark lasts. */
+function remember(register, id) {
   register.set(id, Date.now());
   renderNodeStates();
   setTimeout(() => {
