@@ -130,6 +130,7 @@ TOOLS = [
             "properties": {
                 "node": {"type": "string", "description": "Node id to select"},
                 "note": {"type": "string", "description": "One line shown with it"},
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
             },
             "required": ["node"],
         },
@@ -143,6 +144,7 @@ TOOLS = [
                 "node": {"type": "string", "description": "Node id of the question to ask"},
                 "note": {"type": "string", "description": "One line shown with the question"},
                 "timeout_seconds": {"type": "number", "description": "How long to wait; default 900"},
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
             },
             "required": ["node"],
         },
@@ -155,6 +157,7 @@ TOOLS = [
             "properties": {
                 "text": {"type": "string", "description": "The reply, as the reader will see it"},
                 "node": {"type": "string", "description": "Node the reply is about; shown as its subject"},
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
             },
             "required": ["text"],
         },
@@ -166,6 +169,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "timeout_seconds": {"type": "number", "description": "How long to wait; default 1500"},
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
             },
         },
     },
@@ -177,6 +181,7 @@ TOOLS = [
             "properties": {
                 "node": {"type": "string", "description": "Node id of the question"},
                 "answer": {"type": "string", "description": "The settled answer, one line, as it will appear on the map"},
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
             },
             "required": ["node", "answer"],
         },
@@ -188,6 +193,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "timeout_seconds": {"type": "number", "description": "How long to wait; default 1500"},
+                "name": {"type": "string", "description": "Map name; defaults to the one last opened"},
             },
         },
     },
@@ -208,15 +214,15 @@ class Session:
         self.port = port
         self.lock = threading.Lock()
         self.server = None
-        self.state = None
+        self.board = None
         self.url = None
         self.last_map = None
 
     def ensure(self):
         with self.lock:
             if self.server is None:
-                self.server, self.state, self.url = maps.start(self.root, self.port)
-            return self.state, self.url
+                self.server, self.board, self.url = maps.start(self.root, self.port)
+            return self.board, self.url
 
     def use(self, root):
         """Points the session at another project; returns the root in force."""
@@ -226,6 +232,31 @@ class Session:
                 if self.server is not None:
                     self.server.root = self.root
             return self.root
+
+
+class NoMap(Exception):
+    """No map was named and none is open, so a tool has nothing to work on."""
+
+
+def state_of(session, args):
+    """
+    Returns (state, url, name) for the map a tool works on.
+
+    The map is the one the tool names, the one opened last, or — in a project
+    that holds a single map — that one. Raises NoMap when none of the three
+    answers, because a conversation without a map has nowhere to go.
+    """
+    board, url = session.ensure()
+    known = maps.maps_in(session.root)
+    name = args.get("name") or session.last_map
+    if name is None and len(known) == 1:
+        name = next(iter(known))
+
+    if name not in known:
+        listing = ", ".join(known) or "none"
+        raise NoMap(f"Open a map first with open_map. Maps under {session.root}: {listing}.")
+
+    return board.state(session.root, name), url, name
 
 
 def tool_open_map(session, args):
@@ -240,7 +271,7 @@ def tool_open_map(session, args):
     else:
         session.use(args.get("project"))
 
-    state, url = session.ensure()
+    board, url = session.ensure()
     known = maps.maps_in(session.root)
 
     if name not in known:
@@ -249,6 +280,7 @@ def tool_open_map(session, args):
                 "Name the project root with `project`, or pass the path to the .map.yaml file.")
 
     session.last_map = name
+    board.state(session.root, name)
     address = f"{url}/map/{name}"
     if args.get("browser", True):
         webbrowser.open(address)
@@ -257,7 +289,7 @@ def tool_open_map(session, args):
 
 
 def tool_read_state(session, args):
-    state, _ = session.ensure()
+    state, _, _ = state_of(session, args)
     return json.dumps(state.snapshot(), ensure_ascii=False, indent=2)
 
 
@@ -268,14 +300,8 @@ def said_by_reader(snapshot, seen):
 
 
 def tool_open_questions(session, args):
-    state, _ = session.ensure()
-    known = maps.maps_in(session.root)
-    name = args.get("name") or session.last_map
-    source = known.get(name)
-
-    if source is None:
-        listing = ", ".join(known) or "none"
-        return f"No map named {name}. Maps under {session.root}: {listing}."
+    state, _, name = state_of(session, args)
+    source = maps.maps_in(session.root)[name]
 
     data = mapkit.load(source)
     settled = set(state.snapshot()["resolved"])
@@ -358,7 +384,7 @@ def write_map(source, data, seen):
     except ValueError as error:
         return str(error)
 
-    maps.map_changed()
+    maps.map_changed(source.name[:-len(".map.yaml")])
     return None
 
 
@@ -411,13 +437,13 @@ def tool_remove_node(session, args):
 
 
 def tool_select_on_map(session, args):
-    state, url = session.ensure()
+    state, url, name = state_of(session, args)
     state.update(focus={"node": args["node"], "note": args.get("note", "")})
-    return f"{args['node']} is selected on the map at {url}."
+    return f"{args['node']} is selected on the map at {url}/map/{name}."
 
 
 def tool_ask_on_map(session, args):
-    state, url = session.ensure()
+    state, url, name = state_of(session, args)
     node = args["node"]
     timeout = float(args.get("timeout_seconds", 900))
 
@@ -427,13 +453,13 @@ def tool_ask_on_map(session, args):
 
     if fresh is None:
         state.update(focus=None)
-        return f"Nothing said about {node} within {timeout:.0f}s. The question is still open on the map at {url}."
+        return f"Nothing said about {node} within {timeout:.0f}s. It is still open on the map at {url}/map/{name}."
 
     return json.dumps({"asked": node, "said": [{"text": m["text"], "about": m["about"]} for m in fresh]}, ensure_ascii=False)
 
 
 def tool_wait_for_message(session, args):
-    state, url = session.ensure()
+    state, url, name = state_of(session, args)
     timeout = float(args.get("timeout_seconds", 1500))
     seen = len([m for m in state.snapshot()["chat"] if m["role"] == "you"])
 
@@ -447,7 +473,7 @@ def tool_wait_for_message(session, args):
         state.update(ended=False)
         return "The reader ended the conversation. Stop waiting and report."
     if fresh is None:
-        return f"Nothing said on the map within {timeout:.0f}s. It is still open at {url}."
+        return f"Nothing said on the map within {timeout:.0f}s. It is still open at {url}/map/{name}."
 
     return json.dumps(
         [{"text": m["text"], "about": m["about"], "at": m["at"]} for m in fresh],
@@ -461,18 +487,14 @@ def tool_resolve_on_map(session, args):
     being a question and becomes the decision that was taken, so the record
     survives the conversation.
     """
-    state, _ = session.ensure()
+    state, _, name = state_of(session, args)
     node_id = args["node"]
     answer = args["answer"]
 
     state.add_message("claude", f"Settled: {answer}", node_id)
     state.resolve(node_id, answer)
 
-    known = maps.maps_in(session.root)
-    source = known.get(session.last_map)
-    if source is None:
-        return f"{node_id} is settled on the map: {answer}. No file to write — no map is open."
-
+    source = maps.maps_in(session.root)[name]
     data = mapkit.load(source)
     seen = mapkit.map_stamp(source)
     node = next((n for n in data["nodes"] if n["id"] == node_id), None)
@@ -496,13 +518,13 @@ def tool_resolve_on_map(session, args):
 
 
 def tool_reply_on_map(session, args):
-    state, _ = session.ensure()
+    state, _, _ = state_of(session, args)
     state.add_message("claude", args["text"], args.get("node"))
     return "Replied in the conversation." + (f" Subject: {args['node']}." if args.get("node") else "")
 
 
 def tool_wait_for_apply(session, args):
-    state, url = session.ensure()
+    state, url, name = state_of(session, args)
     timeout = float(args.get("timeout_seconds", 1500))
     before = state.snapshot()["applied"]
 
@@ -511,7 +533,7 @@ def tool_wait_for_apply(session, args):
     )
 
     if applied is None:
-        return f"Apply was not pressed within {timeout:.0f}s. The map is still open at {url}."
+        return f"Apply was not pressed within {timeout:.0f}s. The map is still open at {url}/map/{name}."
 
     return json.dumps(applied, ensure_ascii=False, indent=2)
 
@@ -540,6 +562,8 @@ def call_tool(session, params):
 
     try:
         text = handler(session, params.get("arguments") or {})
+    except NoMap as nothing:
+        return {"content": [{"type": "text", "text": str(nothing)}], "isError": True}
     except Exception as error:
         return {"content": [{"type": "text", "text": f"{name} failed: {error}"}], "isError": True}
 

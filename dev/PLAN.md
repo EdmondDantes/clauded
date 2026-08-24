@@ -93,9 +93,18 @@ is escaped.
         and the auto grid columns of .stage and .dock let the header overflow a
         phone.
 
-- [ ] S6.1 State is one per project, not per map
+- [x] S6.1 State is one per project, not per map
       done: two maps in one project keep separate chats, resolved marks and storage keys
       tier: T2
+      handoff: State takes a map name and writes .clauded/<map>.state.json; a Board
+        makes one state per (project, map) on demand, and every endpoint that
+        carries a conversation names its map — /api/updates?map=, and `map` in the
+        body of a post. /api/inbox without a name still drains every opened map,
+        which is what the Stop hook needs, and tags each line with its map. The
+        page keys localStorage by map name, and the MCP tools take `name`,
+        defaulting to the map opened last. Checked with two maps in one project:
+        chats, settled marks, stamps and state files stay apart, a restart brings
+        each back, and the browser page shows only its own map's lines.
 - [ ] S6.2 The conversation grows without bound
       done: /api/updates serves from a given id, applied lines are trimmed on save
       tier: T1
@@ -163,6 +172,17 @@ drag points at, and the arrangement is picked from a card on the dock.
         4000 lines and coloured by the same mapkit.colour; a path outside the
         root is refused. Checked: mcp.py opened 609 rows with the cited 15
         tinted and scrolled to. Without the server the stored fragment stays.
+
+## S9 — Several maps in one project  [in progress]
+
+Goal: a project with more than one map is worked from the page, not from the
+address bar.
+Done when: the reader moves between maps without typing a URL, and each map
+keeps its own conversation.
+
+- [ ] S9.1 The page offers the maps of the project
+      done: a menu on the page lists every map and opens the one picked
+      tier: T2 · role: —
 
 ## S4 — The mode in the skill
 

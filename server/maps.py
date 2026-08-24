@@ -1,9 +1,9 @@
 """The local map server: renders pages on request and holds what the page reports.
 
-One instance serves every map of one project. It keeps the reader's state in
-memory — the selected node, the answers saved so far, the last Apply — and
-writes the same state under `<root>/.clauded/` so a session that starts later
-can still read it.
+One instance serves every map of one project, and every map keeps its own
+state: the selected node, the answers saved so far, the last Apply. The same
+state is written to `<root>/.clauded/<map>.state.json`, so a session that starts
+later can still read it, and two maps never share a conversation.
 
 Two directions cross here. The page asks `GET /api/updates` on a timer and
 learns which question Claude is waiting on and what Claude has replied; the page
@@ -34,13 +34,14 @@ MAX_BODY = 1 << 20
 # megabytes on one line, and the page holds the answer in memory.
 SOURCE_LINES = 4000
 
-# Bumped whenever a tool writes a map, so a page can tell it must refetch even
-# when two writes land in the same second.
-GENERATION = [0]
+# Counts the writes this server has made to each map by name, so a page can tell
+# it must refetch even when two writes land in the same second — and so a write
+# to one map leaves the pages of the others alone.
+GENERATION = {}
 
 
-def map_changed():
-    GENERATION[0] += 1
+def map_changed(name):
+    GENERATION[name] = GENERATION.get(name, 0) + 1
 
 
 def maps_in(root):
@@ -71,13 +72,15 @@ class State:
     """
     What the open page has reported, and what Claude is waiting for.
 
-    Every change bumps a version and wakes whoever waits on it, so a blocking
-    tool call returns the moment the reader acts instead of polling. `focus` is
-    the one field that travels the other way: Claude sets it, the page reads it.
+    One instance stands for one map of one project. Every change bumps a version
+    and wakes whoever waits on it, so a blocking tool call returns the moment the
+    reader acts instead of polling. `focus` is the one field that travels the
+    other way: Claude sets it, the page reads it.
     """
 
-    def __init__(self, root):
+    def __init__(self, root, name):
         self.root = Path(root)
+        self.name = name
         self.lock = threading.Condition()
         self.version = 0
         self.selection = None
@@ -103,9 +106,13 @@ class State:
         self.counter = 0
         self._restore()
 
+    def file(self):
+        """Where this map's state is kept, one file per map."""
+        return self.root / STATE_DIR / f"{self.name}.state.json"
+
     def _restore(self):
         """Brings back the conversation a previous run of the server held."""
-        saved = self.root / STATE_DIR / "state.json"
+        saved = self.file()
         if not saved.is_file():
             return
 
@@ -147,6 +154,7 @@ class State:
     def snapshot(self):
         with self.lock:
             return {
+                "map": self.name,
                 "version": self.version,
                 "selection": self.selection,
                 "chat": list(self.chat),
@@ -263,11 +271,37 @@ class State:
         self._persist()
 
     def _persist(self):
-        directory = self.root / STATE_DIR
-        directory.mkdir(exist_ok=True)
-        (directory / "state.json").write_text(
+        self.file().parent.mkdir(exist_ok=True)
+        self.file().write_text(
             json.dumps(self.snapshot(), ensure_ascii=False, indent=2), encoding="utf-8"
         )
+
+
+class Board:
+    """
+    The state of each map, made when a map is first asked for and kept by
+    project and name.
+
+    A map nobody has opened has no state here, which is what lets the Stop hook
+    drain every conversation at once without inventing empty ones.
+    """
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.states = {}
+
+    def state(self, root, name):
+        key = (str(Path(root).resolve()), name)
+        with self.lock:
+            if key not in self.states:
+                self.states[key] = State(root, name)
+            return self.states[key]
+
+    def opened(self, root):
+        """Every state made for this project so far, in the order they were made."""
+        wanted = str(Path(root).resolve())
+        with self.lock:
+            return [state for (where, _), state in self.states.items() if where == wanted]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -289,6 +323,27 @@ class Handler(BaseHTTPRequestHandler):
 
     def json_reply(self, status, payload):
         self.reply(status, json.dumps(payload, ensure_ascii=False), "application/json")
+
+    def asked_map(self):
+        """The map named in the query string, or None."""
+        return (parse_qs(urlsplit(self.path).query).get("map") or [""])[0].strip("/")
+
+    def state_for(self, name):
+        """
+        The state of one map, or None with the answer already sent.
+
+        Every endpoint that carries a conversation needs the name: the states of
+        two maps differ in everything but the project they sit in.
+        """
+        if not name:
+            self.json_reply(400, {"error": "name the map: ?map=<name>"})
+            return None
+
+        if name not in maps_in(self.server.root):
+            self.json_reply(404, {"error": f"no map named {name}"})
+            return None
+
+        return self.server.board.state(self.server.root, name)
 
     def do_GET(self):
         root = self.server.root
@@ -325,20 +380,39 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/inbox":
-            state = self.server.state
-            # Draining the inbox is Claude reaching for the map, which is as
-            # good a sign of presence as answering.
-            state.touch()
-            self.json_reply(200, {"messages": state.inbox()})
+            # Named: one map. Unnamed: every map the session has opened, which is
+            # what the Stop hook wants — it knows a turn is ending, not which map
+            # was written on.
+            wanted = self.asked_map()
+            if wanted:
+                state = self.state_for(wanted)
+                if state is None:
+                    return
+                states = [state]
+            else:
+                states = self.server.board.opened(self.server.root)
+
+            messages = []
+            for state in states:
+                # Draining the inbox is Claude reaching for the map, which is as
+                # good a sign of presence as answering.
+                state.touch()
+                for message in state.inbox():
+                    messages.append(dict(message, map=state.name))
+
+            self.json_reply(200, {"messages": messages})
             return
 
         if path == "/api/updates":
-            state = self.server.state
+            state = self.state_for(self.asked_map())
+            if state is None:
+                return
+
             snapshot = state.snapshot()
             self.json_reply(200, {
                 "build": mapkit.build_stamp(),
-                "map": self.map_stamp(),
-                "presence": self.server.state.presence(),
+                "map": self.map_stamp(state.name),
+                "presence": state.presence(),
                 "ended": snapshot["ended"],
                 "focus": snapshot["focus"],
                 "resolved": snapshot["resolved"],
@@ -368,16 +442,19 @@ class Handler(BaseHTTPRequestHandler):
 
         self.reply(200, page)
 
-    def map_stamp(self):
+    def map_stamp(self, name):
         """
-        A stamp that changes whenever the map's data does.
+        A stamp that changes whenever this map's data does.
 
-        Two parts: what the files say now, and how many writes this server has
-        made — a file written twice within one clock tick still moves the stamp.
+        Two parts: what the file says now, and how many writes this server has
+        made to it — a file written twice within one clock tick still moves the
+        stamp. Other maps do not enter it, so a write to one leaves the pages of
+        the rest where they are.
         """
-        names = maps_in(self.server.root)
-        stamps = sorted(f"{name}:{mapkit.map_stamp(path)}" for name, path in names.items())
-        return f"{GENERATION[0]}|" + "|".join(stamps)
+        source = maps_in(self.server.root).get(name)
+        if source is None:
+            return "gone"
+        return f"{GENERATION.get(name, 0)}|{mapkit.map_stamp(source)}"
 
     def serve_source(self, root):
         """
@@ -431,7 +508,10 @@ class Handler(BaseHTTPRequestHandler):
             self.json_reply(400, {"error": "body is not JSON"})
             return
 
-        state = self.server.state
+        state = self.state_for(payload.get("map") or self.asked_map())
+        if state is None:
+            return
+
         payload["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
         if path == "/api/end":
@@ -454,12 +534,12 @@ PORT_TRIES = 12
 
 def start(root=".", port=8791):
     """
-    Starts the server on a background thread and returns (server, state, url).
+    Starts the server on a background thread and returns (server, board, url).
 
     A second Claude Code session, or a hand-started server, already holds the
     default port; rather than failing, the next free port up is taken.
     """
-    state = State(root)
+    board = Board()
     server = None
     last = None
 
@@ -475,7 +555,7 @@ def start(root=".", port=8791):
         raise OSError(f"no free port between {port} and {port + PORT_TRIES - 1}: {last}")
 
     server.root = Path(root)
-    server.state = state
+    server.board = board
     server.daemon_threads = True
 
     thread = threading.Thread(target=server.serve_forever, name="clauded-http", daemon=True)
@@ -490,4 +570,4 @@ def start(root=".", port=8791):
         json.dumps({"url": url, "root": str(Path(root).resolve()), "pid": os.getpid()}), encoding="utf-8"
     )
 
-    return server, state, url
+    return server, board, url

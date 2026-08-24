@@ -1431,6 +1431,11 @@ const MAP = {
 // dialect the server no longer speaks.
 const BUILD = "dev";
 
+// Which map this page is: the last part of /map/<name>, and the name every
+// request and every stored key carries. A project holds several maps, and they
+// share neither a conversation nor a window arrangement.
+const MAP_NAME = decodeURIComponent(location.pathname.split("/").pop() || "map");
+
 const KIND_LABEL = {
   aspect: "aspect",
   question: "open question",
@@ -1617,7 +1622,7 @@ const unread = new Set();
 // separate thread. Lines wait here until Apply and survive a reload through
 // localStorage; with the server running they travel as they are written.
 const pending = { chat: [] };
-const STORE_KEY = "map-chat";
+const STORE_KEY = `map-chat:${MAP_NAME}`;
 
 function loadPending() {
   try {
@@ -2196,11 +2201,9 @@ function resend() {
  * just built rather than always there.
  */
 async function growMap() {
-  const name = location.pathname.split("/").pop();
-
   let next;
   try {
-    next = await fetch(`/api/map/${name}`).then(response => response.ok ? response.json() : null);
+    next = await fetch(`/api/map/${MAP_NAME}`).then(response => response.ok ? response.json() : null);
   } catch (error) {
     return false;
   }
@@ -2655,9 +2658,9 @@ if (location.protocol === "http:" || location.protocol === "https:") {
   }).then(response => response.json());
 
   window.mapBridge = {
-    apply: payload => post("/api/apply", payload),
-    select: id => post("/api/selection", { map: MAP.title, node: id }).catch(() => {}),
-    message: (text, about) => post("/api/message", { map: MAP.title, text, about }),
+    apply: payload => post("/api/apply", { ...payload, map: MAP_NAME }),
+    select: id => post("/api/selection", { map: MAP_NAME, node: id }).catch(() => {}),
+    message: (text, about) => post("/api/message", { map: MAP_NAME, text, about }),
     source: file => fetch(`/api/source?file=${encodeURIComponent(file)}`)
       .then(response => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
   };
@@ -2670,7 +2673,7 @@ if (location.protocol === "http:" || location.protocol === "https:") {
     if (ticking) return;
     ticking = true;
     try {
-      const news = await fetch("/api/updates").then(response => response.json());
+      const news = await fetch(`/api/updates?map=${encodeURIComponent(MAP_NAME)}`).then(response => response.json());
 
       // The map's own data changed — a node was added or settled while we
       // watched — so the graph on screen is out of date.
@@ -2757,7 +2760,7 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 
 // Layout: where the dock sits, which pane comes first, and how big each is.
 // All of it is per-viewer taste, so it lives in this browser and nowhere else.
-const LAYOUT_KEY = "map-layout";
+const LAYOUT_KEY = `map-layout:${MAP_NAME}`;
 const main = document.getElementById("main");
 
 const dockBody = document.getElementById("dockBody");

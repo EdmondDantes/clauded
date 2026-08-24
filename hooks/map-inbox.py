@@ -44,8 +44,11 @@ def main():
 
     lines = ["Edmond wrote on the map. Answer with reply_on_map, then keep working:"]
     for message in messages:
+        # A project holds several maps and the sweep drains them all, so a line
+        # says which map it was written on and reply_on_map can name it back.
+        where = f"[{message['map']}] " if message.get("map") else ""
         about = f" (about {message['about']})" if message.get("about") else ""
-        lines.append(f"- {message['text']}{about}")
+        lines.append(f"- {where}{message['text']}{about}")
 
     print(json.dumps({
         "hookSpecificOutput": {
