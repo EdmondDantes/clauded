@@ -189,9 +189,13 @@ the server records it removes on the way out.
   next thing you type.
 
   Set `CLAUDED_ANSWER=claude` and the server answers instead of waiting: a line
-  that no session has taken within half a minute gets a session started for it,
-  allowed only the map's own tools and nothing of the project. It costs tokens
-  without you watching, which is why it is off by default.
+  that no session has taken within half a minute is answered by one turn bought
+  for it — the map travels in the prompt, the answering session gets no tools,
+  and the server writes the answer into the conversation. Measured here: seven
+  seconds. Giving that session the map's tools instead cost three minutes,
+  because every tool call is another turn. `CLAUDED_ANSWER_MODEL` picks the
+  model, Haiku by default. It spends tokens with nobody watching, which is why
+  it is off unless you ask.
 - **A citation is only as unique as its anchor.** A symbol renamed while a new
   one takes the old name, or an anchor line that reappears elsewhere as it
   vanishes here, still misleads. Everything short of that is caught: a citation

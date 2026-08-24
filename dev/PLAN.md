@@ -50,7 +50,7 @@ Nothing open. A question that returns is written as a step, not as a line here.
 - [x] S3.7 Hold the conversation without the main session
       done: a background subagent runs wait → reply → wait and survives terminal input; seen running while Edmond typed
       handoff: the Stop hook only fires at the end of a turn, so an idle session never reacts on its own
-- [~] S3.8 A line nobody read is answered by a session started for it
+- [x] S3.8 A line nobody read is answered by a session started for it
       done: a line written while every session is idle is answered on the map
         within a minute, and no agent was held open waiting for it
       tier: T2
@@ -65,9 +65,20 @@ Nothing open. A question that returns is written as a step, not as a line here.
         alone, with only the map's tools allowed and nothing of the project
         writable. Off unless `CLAUDED_ANSWER=claude` is set: a session that
         spends tokens while nobody watches is Edmond's decision.
-      left: the live run. Starting a server that spawns `claude` is refused by
-        the permission classifier from inside a session, so the check is one
-        command in a terminal — see the handoff.
+      handoff: run live on 2026-08-24 through a subagent, since a session may
+        not start a server that spawns `claude`: a line written on the map was
+        answered on the map, with the node kept as its subject, and the waiting
+        line from an hour before was answered too.
+        The first shape gave the answering session the map's own tools and took
+        three minutes — every tool call is another turn. The map now travels in
+        the prompt, the session gets no tools, the server writes the answer
+        itself, and the same answer takes seven seconds (twelve on the first
+        measurement, sixty-seven on the session's own model). CLAUDED_ANSWER_MODEL
+        picks the model, Haiku by default.
+        The live check also found two of its own: a server started at a terminal
+        looked session-owned, because anything launched from a Claude Code shell
+        inherits CLAUDE_CODE_SESSION_ID, so `--stop` skipped it; and the record
+        survived a kill, because atexit does not run on SIGTERM. Both fixed.
 
 - [x] S3.9 A map is rebuilt on request, never by itself
       done: nothing regenerates a map without being asked

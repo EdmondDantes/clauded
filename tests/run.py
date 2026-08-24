@@ -489,6 +489,53 @@ def a_citation_names_a_thing(root):
           any("give it a ref" in problem for problem in mapkit.validate(uncited)), True)
 
 
+def a_line_nobody_took_is_answered(root):
+    """A line no session took is answered, and only when nobody is waiting."""
+    import stat
+
+    # Stands in for the answering session: the watcher is what is being checked,
+    # and a real one would spend tokens to say the same thing.
+    stub = root / "answerer.sh"
+    stub.write_text("#!/bin/sh\ncat > /dev/null\necho 'the map says so'\n", encoding="utf-8")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+
+    was, maps.ANSWER_WITH = maps.ANSWER_WITH, str(stub)
+    live = Server(root)
+    try:
+        watcher = maps.Answerer(live.board, root)
+        state = live.board.state(str(root), "alpha")
+
+        state.add_message("you", "что тут открыто?", "q")
+        watcher.round()
+        check("a line just written is left alone", [m["role"] for m in state.snapshot()["chat"]], ["you"])
+
+        # Older than ANSWER_AFTER: the turn that could have taken it has ended.
+        state.chat[0]["at"] = "2020-01-01T00:00:00+00:00"
+        state.stamp = None
+
+        with state.lock:
+            state.listeners = 1
+
+        watcher.round()
+        check("a line something waits on is left alone", len(state.snapshot()["chat"]), 1)
+
+        with state.lock:
+            state.listeners = 0
+
+        watcher.round()
+        said = state.snapshot()["chat"]
+        check("an old line nobody took is answered", [m["role"] for m in said], ["you", "claude"])
+        check("with what the answering session said", said[-1]["text"], "the map says so")
+        check("and keeping the subject", said[-1]["about"], "q")
+        check("the line counts as handed over", state.inbox(), [])
+
+        watcher.round()
+        check("and it is answered once", len(state.snapshot()["chat"]), 2)
+    finally:
+        maps.ANSWER_WITH = was
+        live.stop()
+
+
 def main():
     os.environ["CLAUDE_CODE_SESSION_ID"] = SESSION
 
@@ -497,7 +544,7 @@ def main():
                 a_map_holds_its_own_vocabulary, a_write_can_be_checked,
                 two_sessions_do_not_cross, two_servers_on_one_project,
                 the_old_state_is_inherited, the_page_declares_each_name_once,
-                a_citation_names_a_thing):
+                a_citation_names_a_thing, a_line_nobody_took_is_answered):
         print(f"\n--- {run.__doc__.splitlines()[0]}")
         root = Path(tempfile.mkdtemp(prefix="clauded-test-"))
         try:

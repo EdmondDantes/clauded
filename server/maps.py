@@ -890,15 +890,29 @@ ANSWER_AFTER = 25.0
 # Edmond's call rather than the server's. `CLAUDED_ANSWER=claude` turns it on.
 ANSWER_WITH = os.environ.get("CLAUDED_ANSWER")
 
-ANSWER_PROMPT = """A line was written on the design map "{name}" of this project and nobody read it: \
-the session that opened the map is idle, so you were started to answer that line.
+# Which model answers. The answer is one turn over a map that fits in a prompt,
+# and the wait is a person watching a page: measured on this machine, the same
+# answer took 12s on Haiku and 67s on the session's own model.
+ANSWER_MODEL = os.environ.get("CLAUDED_ANSWER_MODEL", "claude-haiku-4-5-20251001")
 
-The line{about}: {text}
+# How long the answering session may take before it is given up on.
+ANSWER_TIMEOUT = 120.0
 
-Answer on the map, not here. Read it with read_map, answer with reply_on_map — passing `node` when \
-the line is about one — and use resolve_on_map only when the line settles a question. Keep the answer \
-short and in Russian, and say plainly when you do not know. Then stop: do not wait for more, and do \
-not change any file of the project."""
+# How much of the map travels in the prompt. A body is a paragraph and the map
+# is a page of them; the answer needs what each node is, not every word.
+ANSWER_BODY = 200
+
+ANSWER_PROMPT = """You answer one line written on a design map, and you answer it from what the map \
+says. The map is below, one node per line: its id, its state, its title, and what it holds.
+
+Map "{name}":
+{map}
+
+Edmond wrote{about}: {text}
+
+Answer in short plain Russian, the conclusion first. Use what the map says; where it does not say, \
+say so plainly rather than guessing. No greeting, no sign-off — the answer is written straight into \
+a conversation next to the map."""
 
 
 def unanswered(snapshot):
@@ -916,35 +930,59 @@ def written_when(message):
         return 0.0
 
 
+def map_in_words(source):
+    """The map as one line per node, short enough to travel in a prompt."""
+    try:
+        data = mapkit.load(source)
+    except Exception:
+        return ""
+
+    lines = []
+    for node in data.get("nodes") or []:
+        state = node.get("status") or node.get("kind")
+        body = str(node.get("body") or "").replace("\n", " ")[:ANSWER_BODY]
+        lines.append(f"- {node.get('id')} [{state}] {node.get('title')}: {body}")
+
+    return "\n".join(lines)
+
+
 def answer_with_claude(root, name, message):
     """
-    Starts a session whose whole job is to answer one line on the map.
+    Answers one line of the map, and returns the answer or None.
 
     A hook fires at the end of a turn, and a session sitting idle has no turn to
     end — so a line written while nobody works reaches nobody. Rather than hold
-    an agent open in case something is written, one is started because something
-    was. Returns the process, or None when answering is switched off.
+    an agent open in case something is written, one turn is bought because
+    something was.
+
+    The map travels in the prompt and the answering session gets no tools. It
+    could have been given the map's own tools and left to read and reply for
+    itself; measured, that answer took three minutes against twelve seconds,
+    because every tool call is another turn. The server writes the answer into
+    the conversation itself.
     """
     if not ANSWER_WITH:
         return None
 
-    about = f" is about the node {message['about']}" if message.get("about") else ""
-    prompt = ANSWER_PROMPT.format(name=name, about=about, text=message.get("text", ""))
-    tools = ",".join(f"mcp__plugin_clauded_clauded__{tool}" for tool in
-                     ("read_map", "read_state", "open_questions", "reply_on_map",
-                      "select_on_map", "resolve_on_map"))
+    source = maps_in(root).get(name)
+    if source is None:
+        return None
+
+    about = f" about the node {message['about']}" if message.get("about") else ""
+    prompt = ANSWER_PROMPT.format(name=name, map=map_in_words(source),
+                                  about=about, text=message.get("text", ""))
 
     try:
-        return subprocess.Popen(
-            [ANSWER_WITH, "-p", prompt, "--allowedTools", tools],
-            cwd=str(root),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
+        done = subprocess.run(
+            [ANSWER_WITH, "-p", "--allowedTools", "", "--model", ANSWER_MODEL],
+            input=prompt, capture_output=True, text=True,
+            cwd=str(root), timeout=ANSWER_TIMEOUT,
         )
-    except OSError:
+    except (OSError, subprocess.SubprocessError):
         return None
+
+    answer = (done.stdout or "").strip()
+    return answer or None
 
 
 class Answerer(threading.Thread):
@@ -960,7 +998,6 @@ class Answerer(threading.Thread):
         super().__init__(name="clauded-answerer", daemon=True)
         self.board = board
         self.root = root
-        self.working = None
 
     def run(self):
         while ANSWER_WITH:
@@ -973,9 +1010,6 @@ class Answerer(threading.Thread):
                 continue
 
     def round(self):
-        if self.working is not None and self.working.poll() is None:
-            return
-
         for state in self.board.opened(self.root):
             snapshot = state.snapshot()
             if snapshot["listeners"] or snapshot["ended"]:
@@ -985,11 +1019,16 @@ class Answerer(threading.Thread):
             if waiting is None or time.time() - written_when(waiting) < ANSWER_AFTER:
                 continue
 
-            # Taking the line through the inbox is what marks it answered: the
-            # session started below reads it from its prompt, not from the map.
-            state.inbox()
-            self.working = answer_with_claude(self.root, state.name, waiting)
             state.touch()
+            answer = answer_with_claude(self.root, state.name, waiting)
+            if answer is None:
+                # Nothing was said, so nothing is taken: the line stays where it
+                # is and the next turn's Stop hook hands it over as usual.
+                return
+
+            # The line counts as answered only now, and only because it was.
+            state.inbox()
+            state.add_message("claude", answer, waiting.get("about"))
             return
 
 
