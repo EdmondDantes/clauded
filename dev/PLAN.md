@@ -5,10 +5,7 @@ collects questions onto a map and does nothing until Edmond presses Apply.
 
 ## Fog
 
-- What the architecture map cites when a module has no single file.
 - Whether a map should ever be regenerated automatically, or only on request.
-- Citing code by line number goes stale with the first edit above it; an anchor
-  by symbol name would survive, and nothing decides which one wins yet.
 
 ## S1 — The page  [done]
 
@@ -340,6 +337,33 @@ declares.
         fact. `d-derived` requires a source document, and the project has no
         dev/DECISIONS.md to put it in — that file needs agreeing before the
         question can close.
+
+## S13 — A citation names a thing  [done]
+
+Goal: a record points at code that can still be found after the code moves.
+Done when: an edit above a citation changes nothing, and a citation that no
+longer resolves says so instead of showing whatever now stands there.
+
+- [x] S13.1 Citations by symbol, by anchor, or by whole file
+      done: both maps cite by name, a stale citation fails loudly, and a module
+        node without a citation is refused
+      tier: T2 · role: — (designed with Fable, whose anchor-first shape won over
+        a symbol-first one: an anchor needs no language, and the file that would
+        need symbol finding most — a 3000-line HTML holding JS and CSS — is
+        exactly where a regex finder would lie)
+      handoff: three forms in the YAML — `symbol` (a Python def or class, dotted
+        for a method; a Markdown heading), `anchor` (a line of the file written
+        out, with `until` or `span`), or `file` alone. A hand-written `lines:` is
+        refused by validate, which forced the audit: three of the four citations
+        on the design map pointed at unrelated code. Resolution is
+        mapkit.cited_range; a build refuses a citation that will not resolve,
+        while the server marks it dead on the page, because the map is the
+        surface a round is worked on. Bought nothing: ctags or tree-sitter would
+        make a citation mean different things on different machines, and the two
+        finders worth having are eighty lines.
+      note: this closed two lines of the Fog — what an architecture map cites
+        when a module is not one file (several citations, and a module node must
+        carry at least one), and whether line numbers or names win.
 
 ## S4 — The mode in the skill
 

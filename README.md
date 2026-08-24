@@ -71,7 +71,7 @@ nodes:
     options: [yes, no, only before settlement]
     refs:
       - file: src/Payments/Refund.php
-        lines: 12-40
+        symbol: Refund.settle
 edges:
   - [a-refunds, q-partial, holds]
 ```
@@ -84,7 +84,7 @@ edges:
 | `origin` | which file and place the record came from |
 | `why`, `cost`, `status` | written when the source has them |
 | `options` | the alternatives a question names |
-| `refs` | files to cite; the fragment is copied into the page as it renders |
+| `refs` | the code this record points at — by `symbol`, by `anchor`, or a whole file; found and copied in as the page renders |
 
 An aspect groups the nodes under it, gives them their colour, and can be dropped
 from the view with its whole subtree.
@@ -187,8 +187,10 @@ the server records it removes on the way out.
   also delivers at most one batch per turn — a turn the hook itself started
   carries `stop_hook_active` and leaves the map alone, so the line after it waits
   for the next thing you type.
-- **Citations are line numbers.** An edit above a cited range moves it, and the
-  map keeps pointing where the code used to be.
+- **A citation is only as unique as its anchor.** A symbol renamed while a new
+  one takes the old name, or an anchor line that reappears elsewhere as it
+  vanishes here, still misleads. Everything short of that is caught: a citation
+  either follows the code or fails loudly.
 
 ## Layout
 

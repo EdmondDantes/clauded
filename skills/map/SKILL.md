@@ -16,13 +16,29 @@ from `dev/DECISIONS.md`, `dev/PLAN.md` (`## Fog` and `Decide` steps) and
 2. **Write `dev/design/<name>.map.yaml`.** One node per record, with `id`,
    `kind`, `title`, `body` and `origin` — the file and place the record came
    from. Add `why`, `cost` and `status` when the source has them, `options` when
-   a question has named alternatives, and `refs` to cite source files:
+   a question has named alternatives, and `refs` to cite the code. A citation
+   names a thing, never a line number: the render finds it, and an edit above it
+   changes nothing.
 
    ```yaml
    refs:
      - file: src/Auth/Guard.php
-       lines: 12-40
+       symbol: Guard.allows            # a def or class in Python, a heading in Markdown
+     - file: web/app.js
+       anchor: "function refresh() {"  # any language: a line of the file, written out
+       until: "}"                      # ends there, at the anchor's own level
+     - file: src/Auth/Session.php      # the whole file, when the file is the thing
    ```
+
+   `span: 12` reads that many lines from the anchor instead. An anchor must
+   appear once in the file — lengthen it if it does not. A node of kind `module`
+   has to cite something: a module pointing at no code is the map holding
+   knowledge of its own.
+
+   A citation that stops resolving — a symbol renamed, an anchor edited away —
+   fails loudly: the build refuses the map, and a served page draws that citation
+   struck through with the reason on it. That is the point of the form. A line
+   number gone stale looks exactly like one that has not.
 
 3. **Edges only where the source states them.** A connection you can see but
    nobody wrote down belongs in `## Fog`, not on the map.
