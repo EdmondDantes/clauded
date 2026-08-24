@@ -1,7 +1,7 @@
 {
   "name": "clauded",
   "displayName": "Clauded — design maps",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "description": "Interactive design and architecture maps built from a project's own records",
   "author": {
     "name": "Edmond"

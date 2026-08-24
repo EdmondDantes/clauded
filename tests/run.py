@@ -40,6 +40,26 @@ FAILED = []
 SESSION = "clauded-tests"
 
 
+def later(seconds, work):
+    """
+    Runs `work` after a pause, on a thread whose failure is not noise.
+
+    The wait it is racing may end first and take the server with it; a thread
+    dying then prints a traceback across a green run, and a run that prints
+    tracebacks teaches the reader to skip them.
+    """
+    def go():
+        time.sleep(seconds)
+        try:
+            work()
+        except Exception:
+            pass
+
+    thread = threading.Thread(target=go, daemon=True)
+    thread.start()
+    return thread
+
+
 def check(label, got, want):
     ok = got == want
     print(("ok   " if ok else "FAIL ") + f"{label}: {got!r}" + ("" if ok else f" != {want!r}"))
@@ -187,17 +207,16 @@ def finish_is_one_signal(root):
     live.url = session.url
 
     def apply_soon(summary):
-        time.sleep(0.4)
-        live.post("/api/apply", {"map": "alpha", "summary": summary, "answers": {}, "chat": []})
+        return lambda: live.post("/api/apply", {"map": "alpha", "summary": summary, "answers": {}, "chat": []})
 
-    threading.Thread(target=apply_soon, args=("# one\n- you: keep the panel",), daemon=True).start()
+    later(0.4, apply_soon("# one\n- you: keep the panel"))
     check("a question hears the end", mcp.tool_ask_on_map(session, {"node": "q", "timeout_seconds": 5}), mcp.FINISHED)
     check("and takes it with it", live.get("/api/inbox?map=alpha")["messages"], [])
 
-    threading.Thread(target=apply_soon, args=("# two\n- you: ship it",), daemon=True).start()
+    later(0.4, apply_soon("# two\n- you: ship it"))
     check("the conversation hears the same", mcp.tool_wait_for_message(session, {"timeout_seconds": 5}), mcp.FINISHED)
 
-    threading.Thread(target=apply_soon, args=("# three\n- you: last word",), daemon=True).start()
+    later(0.4, apply_soon("# three\n- you: last word"))
     draft = mcp.tool_wait_for_apply(session, {"timeout_seconds": 5})
     check("the draft still comes back whole", json.loads(draft)["summary"], "# three\n- you: last word")
     check("and spends the signal", mcp.tool_wait_for_message(session, {"timeout_seconds": 2}).startswith("Nothing said"),
@@ -223,9 +242,7 @@ def a_line_written_while_claude_works(root):
     live.url = session.url
 
     live.post("/api/message", {"map": "alpha", "text": "use Postgres, not SQLite"})
-    threading.Thread(target=lambda: (time.sleep(0.4),
-                                     live.post("/api/message", {"map": "alpha", "text": "and cap the pool at 8"})),
-                     daemon=True).start()
+    later(0.4, lambda: live.post("/api/message", {"map": "alpha", "text": "and cap the pool at 8"}))
     said = [m["text"] for m in json.loads(mcp.tool_wait_for_message(session, {"timeout_seconds": 5}))]
     check("the earlier line is not stepped over", said[0], "use Postgres, not SQLite")
     session.server.shutdown()
