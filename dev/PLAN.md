@@ -286,6 +286,18 @@ file holds it, and `read_map` reads the map back; a design map silently accepted
 `knowledge` nodes, and a map is now held to the vocabulary its own spec
 declares.
 
+- [x] S12.0 The Stop hook says nothing and eats the line
+      done: a line written on the map reaches the next turn's end and is answered
+      tier: T1 · role: —
+      handoff: two faults, both silent. The manifest named hooks/hooks.json,
+        which is loaded by its path alone, so the loader saw one file twice and
+        the plugin brought no hook at all. With that fixed the hook ran and
+        drained the inbox, but printed `permissionDecision` — a PreToolUse field
+        the Stop branch ignores — so the line was taken and handed to nobody. The
+        decision now travels as `hookSpecificOutput.decision` and as the flat
+        pair, and a stop already blocked once (`stop_hook_active`) leaves the mail
+        where it is instead of draining it.
+
 - [ ] S12.1 Finish hands over answers, not the last thing said
       done: `applied.answers` holds what settles a question, and nothing else
       tier: T1 · role: —

@@ -33,10 +33,25 @@ def inbox():
         return []
 
 
+def event():
+    """The Stop event as the caller wrote it, or an empty one.
+
+    The pipe must be read whatever happens: the caller writes the JSON and waits
+    for it to be taken.
+    """
+    raw = sys.stdin.read()
+    try:
+        return json.loads(raw or "{}")
+    except ValueError:
+        return {}
+
+
 def main():
-    # The hook's own input is not needed, but it must be consumed: the caller
-    # writes the event JSON to stdin and waits for the pipe to be read.
-    sys.stdin.read()
+    # A stop that a hook already blocked carries this flag. Blocking again would
+    # loop, and draining without blocking would drop the line, so the mail is
+    # left where it is and waits for the next turn to end.
+    if event().get("stop_hook_active"):
+        return
 
     messages = inbox()
     if not messages:
@@ -65,13 +80,20 @@ def main():
         about = f" (about {message['about']})" if message.get("about") else ""
         lines.append(f"- {where}{message['text']}{about}")
 
+    # The decision travels twice: `hookSpecificOutput` is what the current
+    # version reads, and the flat pair is the older shape. The wrong field name
+    # costs the message itself — the inbox is drained either way, and a line
+    # nobody was handed is a line Edmond wrote to nobody.
+    reason = "\n".join(lines)
     print(json.dumps({
+        "decision": "block",
+        "reason": reason,
         "hookSpecificOutput": {
             "hookEventName": "Stop",
-            "permissionDecision": "block",
-            "permissionDecisionReason": "\n".join(lines),
-        }
-    }))
+            "decision": "block",
+            "reason": reason,
+        },
+    }, ensure_ascii=False))
 
 
 if __name__ == "__main__":
