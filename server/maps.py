@@ -200,6 +200,7 @@ def index_page(root, names):
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Maps of {Path(root).resolve().name}</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cpath%20d%3D%22M13%2016h4c2%200%202-8%204-8M13%2016h4c2%200%202%208%204%208%22%20fill%3D%22none%22%20stroke%3D%22%23b6bcc7%22%20stroke-width%3D%222%22%2F%3E%3Crect%20x%3D%222%22%20y%3D%2211%22%20width%3D%2211%22%20height%3D%2210%22%20rx%3D%222.5%22%20fill%3D%22%236a3fa0%22%2F%3E%3Ccircle%20cx%3D%2225%22%20cy%3D%228%22%20r%3D%224.5%22%20fill%3D%22%2314724a%22%2F%3E%3Cpath%20d%3D%22M25%2019.5l4.5%204.5-4.5%204.5-4.5-4.5z%22%20fill%3D%22%239a6410%22%2F%3E%3C%2Fsvg%3E">
 <style>
   body {{ font: 15px/1.5 system-ui, sans-serif; margin: 3rem auto; max-width: 34rem; padding: 0 1.5rem; }}
   h1 {{ font-size: 1.1rem; }}
