@@ -11,23 +11,64 @@ turn ends as it would have.
 """
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-ADDRESS = Path.home() / ".clauded" / "server.json"
+SERVERS = Path.home() / ".clauded" / "servers"
 TIMEOUT = 2
 
 
-def inbox():
-    """Returns the messages waiting on the map, or an empty list."""
-    if not ADDRESS.is_file():
+def alive(record):
+    """True while the process that wrote the record is still running."""
+    try:
+        os.kill(int(record["pid"]), 0)
+    except (OSError, ValueError, KeyError):
+        return False
+
+    return True
+
+
+def server_of(session):
+    """
+    The map server this session started, or None.
+
+    Every server leaves a record naming its session, so a second session running
+    at the same time does not take the first one's map. A server started by hand
+    carries no session, and is taken only when it is the only one alive: with two
+    unnamed servers there is nothing to tell them apart by.
+    """
+    if not SERVERS.is_dir():
+        return None
+
+    live = []
+    for path in sorted(SERVERS.glob("*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+
+        if alive(record):
+            live.append(record)
+
+    mine = [record for record in live if session and record.get("session") == session]
+    if mine:
+        return mine[-1]
+
+    loose = [record for record in live if not record.get("session")]
+    return loose[0] if len(loose) == 1 else None
+
+
+def inbox(session):
+    """Returns the messages waiting on this session's map, or an empty list."""
+    record = server_of(session)
+    if record is None:
         return []
 
     try:
-        url = json.loads(ADDRESS.read_text(encoding="utf-8"))["url"]
-        with urllib.request.urlopen(f"{url}/api/inbox", timeout=TIMEOUT) as response:
+        with urllib.request.urlopen(f"{record['url']}/api/inbox", timeout=TIMEOUT) as response:
             return json.loads(response.read()).get("messages") or []
     except (OSError, ValueError, KeyError, urllib.error.URLError):
         return []
@@ -50,10 +91,11 @@ def main():
     # A stop that a hook already blocked carries this flag. Blocking again would
     # loop, and draining without blocking would drop the line, so the mail is
     # left where it is and waits for the next turn to end.
-    if event().get("stop_hook_active"):
+    stopping = event()
+    if stopping.get("stop_hook_active"):
         return
 
-    messages = inbox()
+    messages = inbox(stopping.get("session_id"))
     if not messages:
         return
 

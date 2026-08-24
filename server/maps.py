@@ -12,6 +12,7 @@ one arrives. Binds to 127.0.0.1 only:
 this is one person's tool, not a service.
 """
 
+import atexit
 import json
 import os
 import threading
@@ -28,6 +29,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import mapkit
 
 STATE_DIR = ".clauded"
+
+# Where a running server leaves its address, one file per process. The Stop hook
+# reads this directory and picks the server of its own session: a single file
+# would be overwritten by whichever session started last, and the hook of the
+# first would then drain the map of the second.
+SERVERS = Path.home() / STATE_DIR / "servers"
 MAX_BODY = 1 << 20
 
 # How much of a cited file the code window may ask for. A generated file runs to
@@ -42,6 +49,57 @@ GENERATION = {}
 
 def map_changed(name):
     GENERATION[name] = GENERATION.get(name, 0) + 1
+
+
+def running():
+    """
+    Every map server alive on this machine: the records, dead ones removed.
+
+    A record names the session that started the server, when there was one —
+    a server started by hand from serve.py has none.
+    """
+    if not SERVERS.is_dir():
+        return []
+
+    alive = []
+    for path in sorted(SERVERS.glob("*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            os.kill(int(record["pid"]), 0)
+        except (OSError, ValueError, KeyError):
+            path.unlink(missing_ok=True)
+            continue
+
+        alive.append(record)
+
+    return alive
+
+
+def announce(url, root):
+    """
+    Writes this process's address where the Stop hook will find it, and returns
+    the record.
+
+    The session id comes from the environment Claude Code gives an MCP server it
+    starts; the hook has the same id in its own input, and that is what pairs the
+    two. The record is removed when the process ends.
+    """
+    SERVERS.mkdir(parents=True, exist_ok=True)
+    running()
+
+    record = {
+        "url": url,
+        "root": str(Path(root).resolve()),
+        "pid": os.getpid(),
+        "session": os.environ.get("CLAUDE_CODE_SESSION_ID"),
+    }
+
+    # By pid and port: one process may hold more than one server, and each
+    # server's record has to come and go with the server itself.
+    mine = SERVERS / f"{os.getpid()}-{urlsplit(url).port}.json"
+    mine.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    atexit.register(lambda: mine.unlink(missing_ok=True))
+    return record
 
 
 def maps_in(root):
@@ -672,12 +730,6 @@ def start(root=".", port=8791):
     thread.start()
 
     url = f"http://127.0.0.1:{port}"
-    # The Stop hook runs in its own process and needs to find this server; the
-    # home directory is the one place both sides agree on.
-    home = Path.home() / STATE_DIR
-    home.mkdir(exist_ok=True)
-    (home / "server.json").write_text(
-        json.dumps({"url": url, "root": str(Path(root).resolve()), "pid": os.getpid()}), encoding="utf-8"
-    )
+    announce(url, root)
 
     return server, board, url

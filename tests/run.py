@@ -8,6 +8,7 @@ outside the temporary directory and prints one line per check.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,11 @@ import mcp
 
 PORT = 8899
 FAILED = []
+
+# The session these servers claim to belong to. The Stop hook pairs itself with
+# a server by this id, and a run that borrowed the real one would leave records
+# that a live session's hook would then follow into a temporary directory.
+SESSION = "clauded-tests"
 
 
 def check(label, got, want):
@@ -194,8 +200,8 @@ def finish_is_one_signal(root):
 
     live.post("/api/apply", {"map": "alpha", "summary": "# four\n- you: done", "answers": {}, "chat": []})
     hook = subprocess.run([sys.executable, str(HERE / "hooks" / "map-inbox.py")],
-                          input="{}", capture_output=True, text=True, timeout=10)
-    reason = json.loads(hook.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+                          input=json.dumps({"session_id": SESSION}), capture_output=True, text=True, timeout=10)
+    reason = json.loads(hook.stdout)["hookSpecificOutput"]["reason"]
     check("with nobody waiting, the hook says it", reason.splitlines()[0].startswith("Edmond pressed Finish"), True)
     check("and prints the draft", "    - you: done" in reason, True)
     session.server.shutdown()
@@ -303,10 +309,52 @@ def a_write_can_be_checked(root):
     session.server.shutdown()
 
 
+def two_sessions_do_not_cross(root):
+    """Each session's Stop hook reaches its own server and no other."""
+    was = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    servers = []
+    try:
+        # A project each: two sessions on one project would also share its state
+        # files, which is a separate hole and not what this checks.
+        for session, port in (("tests-a", PORT + 1), ("tests-b", PORT + 2)):
+            mine = root / session
+            mine.mkdir()
+            project(mine)
+            os.environ["CLAUDE_CODE_SESSION_ID"] = session
+            server, board, url = maps.start(str(mine), port)
+            servers.append((session, server, url))
+
+        for session, _, url in servers:
+            request = urllib.request.Request(
+                url + "/api/message",
+                data=json.dumps({"map": "alpha", "text": f"written for {session}"}).encode(),
+                headers={"Content-Type": "application/json"}, method="POST")
+            urllib.request.urlopen(request, timeout=5).read()
+
+        for session, _, _ in servers:
+            hook = subprocess.run([sys.executable, str(HERE / "hooks" / "map-inbox.py")],
+                                  input=json.dumps({"session_id": session}), capture_output=True,
+                                  text=True, timeout=10)
+            reason = json.loads(hook.stdout)["hookSpecificOutput"]["reason"]
+            check(f"the hook of {session} takes its own line", f"written for {session}" in reason, True)
+            other = "tests-b" if session == "tests-a" else "tests-a"
+            check(f"and not {other}'s", f"written for {other}" in reason, False)
+    finally:
+        for _, server, _ in servers:
+            server.shutdown()
+        if was is None:
+            os.environ.pop("CLAUDE_CODE_SESSION_ID", None)
+        else:
+            os.environ["CLAUDE_CODE_SESSION_ID"] = was
+
+
 def main():
+    os.environ["CLAUDE_CODE_SESSION_ID"] = SESSION
+
     for run in (state_is_per_map, the_wire_is_bounded, a_restart_remembers, finish_is_one_signal,
                 a_line_written_while_claude_works, the_pipe_serves_more_than_one,
-                a_map_holds_its_own_vocabulary, a_write_can_be_checked):
+                a_map_holds_its_own_vocabulary, a_write_can_be_checked,
+                two_sessions_do_not_cross):
         print(f"\n--- {run.__doc__.splitlines()[0]}")
         root = Path(tempfile.mkdtemp(prefix="clauded-test-"))
         try:

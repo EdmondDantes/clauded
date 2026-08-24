@@ -135,19 +135,17 @@ nodes:
     drift that 14.4 warns about.'
   origin: rejected, this session
 - id: q-server-slot
-  kind: question
+  kind: decision
   title: One slot in server.json for every session
   body: ~/.clauded/server.json holds one record — url, root, pid — and every server that starts
     overwrites it. The Stop hook reads that one file, so the second session to start takes
     the reverse channel from the first, and the map open on the first server reaches nobody.
   origin: S11.1 in dev/PLAN.md, from the review of 2026-08-24
   why: 'Two sessions at once is a low bar: any second `claude` anywhere on the machine rewrites
-    the record. Both sessions of one project also write the same state files, last write winning.'
-  status: open
-  options:
-  - a table keyed by session id
-  - one record per session file
-  - the hook asks the server
+    the record. Both sessions of one project also write the same state files, last write winning.
+    Settled on the map: One record per server in ~/.clauded/servers, and the Stop hook takes
+    the one whose session id matches its own event'
+  status: decided
 - id: q-orphan-state
   kind: question
   title: The pre-split state is left behind

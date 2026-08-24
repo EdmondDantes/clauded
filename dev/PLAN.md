@@ -258,13 +258,25 @@ as an empty conversation; `Finish` could be pressed twice and replay the round;
 `tests/run.py` holds the checks behind every closed step above, against the real
 server and the real MCP handlers.
 
-- [ ] S11.1 One address file for every session
+- [x] S11.1 One address file for every session
       done: two sessions at once, and each one's Stop hook reaches its own server
       tier: T2 · role: —
-      note: `maps.start` writes ~/.clauded/server.json unconditionally and the
-        hook reads that one file, so the second session to start takes the
-        channel from the first. Both sessions of one project also write the same
-        state files, last write winning.
+      handoff: a server writes ~/.clauded/servers/<pid>-<port>.json holding its
+        url, root and the session that started it — CLAUDE_CODE_SESSION_ID, which
+        Claude Code puts in the environment of an MCP server it starts and in the
+        Stop event of the same session. The hook pairs itself by that id; a
+        server started by hand carries no id and is taken only when it is the
+        only one alive. A record is removed when its process ends, and a dead
+        one is swept on the next start. Checked in tests/run.py: two servers,
+        two sessions, each hook takes its own line and neither takes the other's.
+
+- [ ] S11.3 Two sessions on one project overwrite each other's state
+      done: two servers on one project keep a conversation each, or one refuses to start
+      tier: T2 · role: —
+      note: the state files are per map, not per session, and every write is a
+        whole-file rename. Two sessions in the same project take turns clobbering
+        the chat, `delivered` and `applied`. Seen while testing S11.1: a second
+        server on the same root restored the first one's lines as its own.
 - [ ] S11.2 An upgrade keeps what the old page and the old server held
       done: a conversation written before the per-map split is still there after it
       tier: T1 · role: —
