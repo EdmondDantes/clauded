@@ -113,7 +113,7 @@ def state_is_per_map(root):
     live.board.state(str(root), "alpha").resolve("q", "yes")
     check("settled marks stay apart", (list(live.get("/api/updates?map=alpha")["resolved"]),
                                        list(live.get("/api/updates?map=beta")["resolved"])), (["q"], []))
-    check("one state file per map", sorted(p.name for p in (root / ".clauded").iterdir()),
+    check("one state file per map", sorted(p.name for p in (root / ".clauded").glob("*.state.json")),
           ["alpha.state.json", "beta.state.json"])
 
     swept = live.get("/api/inbox")["messages"]
@@ -348,13 +348,58 @@ def two_sessions_do_not_cross(root):
             os.environ["CLAUDE_CODE_SESSION_ID"] = was
 
 
+def two_servers_on_one_project(root):
+    """Two servers on one project keep every line, and hand each over once."""
+    first = Server(root)
+    second = Server.__new__(Server)
+    second.root = root
+    second.server, second.board, second.url = maps.start(str(root), PORT + 4)
+
+    first.post("/api/message", {"map": "alpha", "text": "written on the first"})
+    second.post("/api/message", {"map": "alpha", "text": "written on the second"})
+
+    check("the first sees both", sorted(m["text"] for m in first.get("/api/updates?map=alpha")["chat"]),
+          ["written on the first", "written on the second"])
+    check("the second sees both", sorted(m["text"] for m in second.get("/api/updates?map=alpha")["chat"]),
+          ["written on the first", "written on the second"])
+
+    taken = sorted(m["text"] for m in first.get("/api/inbox?map=alpha")["messages"])
+    check("one of them hands both over", taken, ["written on the first", "written on the second"])
+    check("and the other has nothing left", second.get("/api/inbox?map=alpha")["messages"], [])
+
+    first.stop()
+    second.stop()
+
+
+def the_old_state_is_inherited(root):
+    """A conversation held before the split is taken by the first map to ask."""
+    (root / ".clauded").mkdir(exist_ok=True)
+    (root / ".clauded" / "state.json").write_text(json.dumps({
+        "chat": [{"id": "old-1", "role": "you", "text": "written before the split", "about": None,
+                  "at": "2026-08-23T10:00:00+00:00"}],
+        "delivered": 0,
+        "resolved": {"q": {"note": "settled long ago", "at": "2026-08-23T10:00:00+00:00"}},
+        "applied": None,
+    }, ensure_ascii=False), encoding="utf-8")
+
+    live = Server(root)
+    first = live.get("/api/updates?map=alpha")
+    check("the first map takes it", [m["text"] for m in first["chat"]], ["written before the split"])
+    check("with what was settled", list(first["resolved"]), ["q"])
+    check("and it is not offered twice", live.get("/api/updates?map=beta")["chat"], [])
+    check("the old file is set aside", (root / ".clauded" / "state.json").exists(), False)
+    check("and kept under its own name", (root / ".clauded" / "state.json.taken").exists(), True)
+    live.stop()
+
+
 def main():
     os.environ["CLAUDE_CODE_SESSION_ID"] = SESSION
 
     for run in (state_is_per_map, the_wire_is_bounded, a_restart_remembers, finish_is_one_signal,
                 a_line_written_while_claude_works, the_pipe_serves_more_than_one,
                 a_map_holds_its_own_vocabulary, a_write_can_be_checked,
-                two_sessions_do_not_cross):
+                two_sessions_do_not_cross, two_servers_on_one_project,
+                the_old_state_is_inherited):
         print(f"\n--- {run.__doc__.splitlines()[0]}")
         root = Path(tempfile.mkdtemp(prefix="clauded-test-"))
         try:

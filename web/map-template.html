@@ -1736,6 +1736,15 @@ const STORE_KEY = `map-chat:${MAP_NAME}`;
 
 function loadPending() {
   try {
+    // Until the conversation was split per map it was stored under one key. The
+    // first map to open takes what is there and clears it, so a draft written
+    // before the split is not lost on the upgrade.
+    const legacy = localStorage.getItem("map-chat");
+    if (legacy !== null && localStorage.getItem(STORE_KEY) === null) {
+      localStorage.setItem(STORE_KEY, legacy);
+      localStorage.removeItem("map-chat");
+    }
+
     const raw = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
     if (Array.isArray(raw)) pending.chat.push(...raw);
   } catch (error) {
@@ -2513,10 +2522,12 @@ async function applyPending() {
 /** The reader's last word about each node, next to the conversation itself. */
 function lastWordPerNode() {
   const answers = {};
-  // The round being handed over, not every round the page remembers: a line
-  // from a round that closed yesterday is not an answer to anything now.
+  // An answer answers a question. A line about a decision or an aspect is a
+  // remark, and handing it over as the node's answer read as one.
   for (const message of pending.chat.filter(message => !message.applied)) {
-    if (message.role === "you" && message.about) answers[message.about] = message.text;
+    if (message.role !== "you" || !message.about) continue;
+    if (byId.get(message.about)?.kind !== "question") continue;
+    answers[message.about] = message.text;
   }
 
   return answers;

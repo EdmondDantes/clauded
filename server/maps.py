@@ -13,6 +13,7 @@ this is one person's tool, not a service.
 """
 
 import atexit
+import fcntl
 import json
 import os
 import threading
@@ -35,6 +36,12 @@ STATE_DIR = ".clauded"
 # would be overwritten by whichever session started last, and the hook of the
 # first would then drain the map of the second.
 SERVERS = Path.home() / STATE_DIR / "servers"
+
+# The project the last server served. A reloaded plugin starts the server again
+# in the directory Claude Code was launched in, which is often not the project
+# holding the maps, and a page open on the old server would then be told its map
+# does not exist.
+LAST_ROOT = Path.home() / STATE_DIR / "last-root"
 MAX_BODY = 1 << 20
 
 # How much of a cited file the code window may ask for. A generated file runs to
@@ -99,7 +106,32 @@ def announce(url, root):
     mine = SERVERS / f"{os.getpid()}-{urlsplit(url).port}.json"
     mine.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
     atexit.register(lambda: mine.unlink(missing_ok=True))
+
+    if maps_in(record["root"]):
+        LAST_ROOT.write_text(record["root"], encoding="utf-8")
+
     return record
+
+
+def project_root(asked):
+    """
+    The project to serve: the one asked for, or the last one served when the one
+    asked for holds no maps at all.
+
+    Claude Code starts an MCP server in the directory the session was started in.
+    That is a fine default and a poor guess: a session started in a home
+    directory serves nothing, and the page that was open goes deaf. A directory
+    with maps in it is never overruled.
+    """
+    if maps_in(asked) or not LAST_ROOT.is_file():
+        return Path(asked)
+
+    try:
+        remembered = Path(LAST_ROOT.read_text(encoding="utf-8").strip())
+    except OSError:
+        return Path(asked)
+
+    return remembered if maps_in(remembered) else Path(asked)
 
 
 def maps_in(root):
@@ -156,9 +188,14 @@ class State:
         # Set when the reader ends the round: whoever is waiting learns the talk
         # is over instead of hanging until a timeout.
         self.ended = False
-        # How many of the reader's messages have already been handed to Claude,
-        # so the same line is not delivered twice.
-        self.delivered = 0
+        # The reader's lines already handed to Claude, by id. A count would do
+        # for one server, but two servers on one project each write their own
+        # lines into the same file, and the first three of a joined chat are not
+        # the three that were handed over.
+        self.handed = set()
+        # What the state file said when this server last read or wrote it. A
+        # different stamp means another server has written since.
+        self.stamp = None
         # Every message gets an id unique across restarts, so a page that
         # remembers more than the server does can still tell what is new.
         # The pid keeps two servers started in the same second from minting the
@@ -171,10 +208,78 @@ class State:
         """Where this map's state is kept, one file per map."""
         return self.root / STATE_DIR / f"{self.name}.state.json"
 
+    def _inherit(self):
+        """
+        The conversation held before state was split per map, or None.
+
+        Until 2026-08-24 one file, `.clauded/state.json`, held the state of the
+        whole project. It names no map, so the first map to ask takes it, and it
+        is set aside afterwards rather than handed to the next one as well.
+        """
+        legacy = self.root / STATE_DIR / "state.json"
+        if not legacy.is_file():
+            return None
+
+        taken = legacy.with_suffix(".json.taken")
+        try:
+            os.replace(legacy, taken)
+        except OSError:
+            return None
+
+        return taken
+
+    def _stamp(self):
+        """What the state file looks like on disk, or None when there is none."""
+        try:
+            state = self.file().stat()
+        except OSError:
+            return None
+
+        return (state.st_mtime_ns, state.st_size)
+
+    def _sync(self):
+        """
+        Takes in what another server wrote to the same file since we last looked.
+
+        Two sessions in one project each hold this map in memory and write the
+        same file. Without this each would overwrite the other's lines with its
+        own idea of the conversation; with it, both keep everything and the file
+        is the meeting point. The caller holds the lock.
+        """
+        stamp = self._stamp()
+        if stamp is None or stamp == self.stamp:
+            return
+
+        self.stamp = stamp
+        try:
+            theirs = json.loads(self.file().read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return
+
+        known = {message.get("id") for message in self.chat}
+        for message in theirs.get("chat") or []:
+            if isinstance(message, dict) and message.get("id") not in known:
+                self.chat.append(message)
+
+        self.chat.sort(key=lambda message: (str(message.get("at")), str(message.get("id"))))
+        self.counter = max(self.counter, len(self.chat))
+        self.handed |= set(theirs.get("handed") or [])
+
+        for node, mark in (theirs.get("resolved") or {}).items():
+            self.resolved.setdefault(node, mark)
+
+        # The later draft wins: both carry the moment Apply was pressed.
+        mine = (self.applied or {}).get("at") or ""
+        yours = (theirs.get("applied") or {}).get("at") or ""
+        if yours > mine:
+            self.applied = theirs["applied"]
+
     def _restore(self):
         """Brings back the conversation a previous run of the server held."""
         saved = self.file()
         if not saved.is_file():
+            saved = self._inherit()
+        if saved is None or not saved.is_file():
             return
 
         try:
@@ -183,14 +288,22 @@ class State:
             return
 
         self.chat = [m for m in data.get("chat", []) if isinstance(m, dict)]
-        self.delivered = int(data.get("delivered") or 0)
         # A message saved before ids existed still needs one: without it the
         # page treats the same reply as new on every poll.
         for index, message in enumerate(self.chat, start=1):
             message.setdefault("id", f"restored-{index}")
+
         self.counter = len(self.chat)
         self.resolved = data.get("resolved") or {}
         self.applied = data.get("applied")
+        self.handed = set(data.get("handed") or [])
+        # Written before the ids: the count named the first N lines of the
+        # reader's, and those are the ones it stood for.
+        if "handed" not in data and data.get("delivered"):
+            mine = [m["id"] for m in self.chat if m.get("role") == "you"]
+            self.handed = set(mine[:int(data["delivered"])])
+
+        self.stamp = self._stamp()
 
     def touch(self):
         """Records that Claude is on this map right now."""
@@ -214,13 +327,15 @@ class State:
 
     def snapshot(self):
         with self.lock:
+            self._sync()
             return {
                 "map": self.name,
                 "version": self.version,
                 "selection": self.selection,
                 "chat": list(self.chat),
                 "listeners": self.listeners,
-                "delivered": self.delivered,
+                "handed": sorted(self.handed),
+                "delivered": len(self.handed),
                 "ended": self.ended,
                 "resolved": dict(self.resolved),
                 "applied": self.applied,
@@ -357,9 +472,9 @@ class State:
     def inbox(self):
         """The reader's messages Claude has not been given yet, and marks them given."""
         with self.lock:
-            mine = [m for m in self.chat if m["role"] == "you"]
-            fresh = mine[self.delivered:]
-            self.delivered = len(mine)
+            self._sync()
+            fresh = [m for m in self.chat if m["role"] == "you" and m["id"] not in self.handed]
+            self.handed |= {message["id"] for message in fresh}
             # Handing the finish over spends the signal, the same way a waiting
             # call spends it: the end is told once, and a wait that starts after
             # belongs to the next round.
@@ -404,17 +519,29 @@ class State:
         """
         Writes the state beside the file and renames it into place.
 
-        Two threads persist at once — a post and a drained inbox — and a half
-        written file reads back as an empty conversation, which hands the whole
-        log to Claude a second time.
+        Two threads of this server persist at once — a post and a drained inbox —
+        and a half written file reads back as an empty conversation, which hands
+        the whole log to Claude a second time. A second server on the same
+        project is kept out by a lock file for the length of the read, the merge
+        and the write, so neither loses what the other wrote in between.
         """
         with self.writing:
             self.file().parent.mkdir(exist_ok=True)
-            temporary = self.file().with_suffix(".writing")
-            temporary.write_text(
-                json.dumps(self.snapshot(), ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            os.replace(temporary, self.file())
+            guard = self.file().with_suffix(".lock")
+
+            with open(guard, "a+", encoding="utf-8") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                try:
+                    with self.lock:
+                        self._sync()
+                        payload = json.dumps(self.snapshot(), ensure_ascii=False, indent=2)
+
+                    temporary = self.file().with_suffix(".writing")
+                    temporary.write_text(payload, encoding="utf-8")
+                    os.replace(temporary, self.file())
+                    self.stamp = self._stamp()
+                finally:
+                    fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 class Board:
@@ -707,6 +834,7 @@ def start(root=".", port=8791):
     A second Claude Code session, or a hand-started server, already holds the
     default port; rather than failing, the next free port up is taken.
     """
+    root = project_root(root)
     board = Board()
     server = None
     last = None

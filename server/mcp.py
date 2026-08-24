@@ -234,6 +234,10 @@ class Session:
         with self.lock:
             if self.server is None:
                 self.server, self.board, self.url = maps.start(self.root, self.port)
+                # The server may have taken the project it served last, when the
+                # directory the session started in holds no maps. The session
+                # follows the server rather than the other way round.
+                self.root = Path(self.server.root)
             return self.board, self.url
 
     def use(self, root):
@@ -354,8 +358,8 @@ def unread(snapshot):
     a line written while Claude was working belongs to the next call that asks,
     and counting from the start of the call would step over it.
     """
-    mine = [m for m in snapshot["chat"] if m["role"] == "you"]
-    return mine[snapshot["delivered"]:] or None
+    handed = set(snapshot.get("handed") or [])
+    return [m for m in snapshot["chat"] if m["role"] == "you" and m["id"] not in handed] or None
 
 
 def tool_open_questions(session, args):

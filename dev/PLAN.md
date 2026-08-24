@@ -270,18 +270,33 @@ server and the real MCP handlers.
         one is swept on the next start. Checked in tests/run.py: two servers,
         two sessions, each hook takes its own line and neither takes the other's.
 
-- [ ] S11.3 Two sessions on one project overwrite each other's state
+- [x] S11.3 Two sessions on one project overwrite each other's state
       done: two servers on one project keep a conversation each, or one refuses to start
       tier: T2 · role: —
-      note: the state files are per map, not per session, and every write is a
-        whole-file rename. Two sessions in the same project take turns clobbering
-        the chat, `delivered` and `applied`. Seen while testing S11.1: a second
-        server on the same root restored the first one's lines as its own.
-- [ ] S11.2 An upgrade keeps what the old page and the old server held
+      handoff: they keep one conversation between them instead. A write takes the
+        file's lock, reads what is there, merges and writes back; a read notices
+        another server's write by the file's stamp and takes it in. What was
+        handed to Claude became a set of message ids rather than a count, because
+        the first three lines of a joined chat are not the three that travelled.
+        Edmond chose this over one shared server per project: a daemon would move
+        the whole Claude side onto HTTP for two fixes worth forty lines here.
+- [x] S11.2 An upgrade keeps what the old page and the old server held
       done: a conversation written before the per-map split is still there after it
       tier: T1 · role: —
-      note: .clauded/state.json and the localStorage key `map-chat` are orphaned
-        by the split; nothing reads or removes them.
+      handoff: the first map to ask for its state takes `.clauded/state.json` and
+        renames it `state.json.taken`, so the next map is not handed the same
+        conversation; the page does the same with the `map-chat` key. Both are
+        one-time and leave nothing to read twice.
+
+- [x] S11.4 A reloaded server keeps serving the project it served
+      done: a page open on a map stays alive across /reload-plugins
+      tier: T1 · role: —
+      handoff: Claude Code starts an MCP server in the directory the session was
+        started in, which is often a home directory with no maps, and the open
+        page was then told its map does not exist. `~/.clauded/last-root` holds
+        the last project actually served, and start() takes it when the directory
+        it was given holds no maps at all. The session then follows the server's
+        root rather than its own.
 
 ## S12 — What Edmond found on the map  [in progress]
 
@@ -310,12 +325,12 @@ declares.
         pair, and a stop already blocked once (`stop_hook_active`) leaves the mail
         where it is instead of draining it.
 
-- [ ] S12.1 Finish hands over answers, not the last thing said
+- [x] S12.1 Finish hands over answers, not the last thing said
       done: `applied.answers` holds what settles a question, and nothing else
       tier: T1 · role: —
-      note: `lastWordPerNode` takes the last line about a node as its answer, so
-        "пиздец боред" arrived as the answer to a question. Narrowed to the round
-        being handed over, which is not the same as narrowing it to answers.
+      handoff: only a line about a node whose kind is `question` counts, and only
+        from the round being handed over. A remark about a decision or an aspect
+        stays in the chat, where it is a remark.
 - [ ] S12.2 A question settled in code but not in a document
       done: q-panel is closed on the map, and a document records why
       tier: T1 · role: —
