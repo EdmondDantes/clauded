@@ -53,13 +53,19 @@ missing — all four look on the page like a record that exists.
 - **Talk on it.** One conversation for the whole map, in its own column. What
   you select becomes the subject of the next line, and each line shows the
   subject it had; Claude selects a node too, when the answer is due there.
-- **One question at a time.** Press `q` for the walkthrough: one card, one
-  question, progress across the top.
+- **One question at a time.** The button on the strip hands Claude the mode and
+  points it at the first open question; the questions then come one by one in
+  the conversation, and each is settled on the map before the next is asked.
 - **Read the code.** A node can cite files; the fragment is copied into the page
   as it is rendered and opens in a window, coloured when the server rendered it.
 - **Apply.** Nothing leaves the page until Apply is pressed. Without the plugin
   running, Apply copies the threads as text for you to paste into the
-  conversation; with it, they go straight to the session.
+  conversation; with it, they go straight to the session. Finish ends the round:
+  the log marks the handover, and Claude is told the round is over wherever it
+  is — in a call blocked on the map, or at the end of its turn.
+- **Several maps.** A project can hold more than one, and the title in the
+  header lists them. Each keeps its own conversation, its own settled marks and
+  its own window arrangement.
 
 Answers survive a reload through the browser's own storage and never travel
 anywhere on their own.
@@ -72,7 +78,11 @@ in the chat:
 | tool | what it does |
 |---|---|
 | `open_map` | render a map and hand back its address |
-| `read_state` | the selected node and every thread as it stands |
+| `open_questions` | what is still open on it, so the round has an end |
+| `add_node` | write a new node into the map while the talk goes on |
+| `edit_node` | change what a node says |
+| `remove_node` | take a node off the map when it turned out wrong |
+| `read_state` | the selected node and the conversation as it stands |
 | `select_on_map` | point at a node, making it the subject, without waiting |
 | `ask_on_map` | point at one question and block until something is said |
 | `wait_for_message` | block until anything is written anywhere on the map |
@@ -84,10 +94,15 @@ in the chat:
 no work starts. The page picks the pointer up within a second and a half, opens
 that question and says who is waiting.
 
+Every tool takes `name` and falls back to the map opened last, so two maps in
+one project never mix.
+
 A blocking call is not how the conversation stays alive: typing in the terminal
 interrupts the turn and the call with it. The plugin's Stop hook does that job —
-before a turn ends it drains the map's inbox and blocks the stop, so Claude
-answers whatever was written, whether or not it was waiting.
+before a turn ends it drains the inbox of every open map and blocks the stop, so
+Claude answers whatever was written, whether or not it was waiting. Finish
+travels the same way and is said once: whoever hears it first — a blocked call
+or the hook — is the one told the round is over.
 
 ## Layout
 
