@@ -127,6 +127,7 @@ the chat:
 | `remove_node` | take a node off the map when it turned out wrong |
 | `select_on_map` | point at a node, making it the subject, without waiting |
 | `read_state` | the selection, the conversation and what was handed over |
+| `read_map` | the map as its file holds it, to check what a write did |
 | `ask_on_map` | point at one question and block until something is said |
 | `wait_for_message` | block until anything is written on the map |
 | `reply_on_map` | write a reply into the conversation |
@@ -163,18 +164,23 @@ takes `name` and falls back to the map opened last.
 python3 tests/run.py
 ```
 
-It builds a throwaway project of two maps in a temporary directory, starts the
-real server on port 8899 and drives the real MCP handlers, then checks the
-conditions `dev/PLAN.md` closes its steps on: state that stays per map, a
+It builds a throwaway project of two maps in a temporary directory, starts real
+servers on spare ports from 8899 and drives the real MCP handlers, then checks
+the conditions `dev/PLAN.md` closes its steps on: state that stays per map, a
 conversation that travels bounded, a restart that remembers what was handed
-over, and Finish arriving as one signal. It writes nothing outside the temporary
-directory.
+over, Finish arriving as one signal, two sessions that do not take each other's
+mail, two servers on one project that keep every line, and a map held to the
+vocabulary it declares. It writes nothing outside the temporary directory except
+the server records it removes on the way out.
 
 ## What it does not do
 
-- **One server per session.** Each session starts its own on the first free port
-  from 8791 and records the last one in `~/.clauded/server.json`, which the Stop
-  hook reads. Two sessions at once, and the hook follows whichever started last.
+- **One server per session, one conversation per map.** Each session starts its
+  own server on the first free port from 8791 and leaves a record in
+  `~/.clauded/servers/` naming the session; the Stop hook takes the record that
+  matches its own session, so two sessions do not take each other's channel. A
+  project's state files are shared, and a write merges rather than overwrites —
+  two sessions on one project talk into one conversation, not two.
 - **Nothing wakes an idle session.** A session that is not in a turn hears
   nothing until its next turn ends; the Stop hook is the reverse channel, and a
   channel that pushes into an idle session does not exist here yet.
