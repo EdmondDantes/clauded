@@ -82,6 +82,9 @@ class State:
         self.root = Path(root)
         self.name = name
         self.lock = threading.Condition()
+        # Held over a write to the state file. Two threads renaming the same
+        # temporary file leaves the second with nothing to rename.
+        self.writing = threading.Lock()
         self.version = 0
         self.selection = None
         self.chat = []
@@ -166,11 +169,15 @@ class State:
                 "focus": self.focus,
             }
 
-    def wait_for(self, test, timeout=None):
+    def wait_for(self, test, timeout=None, stop=None):
         """
         Blocks until `test(snapshot)` returns something other than None, or the
         timeout runs out; returns that value, or None. The caller decides what
         counts as an answer, so one wait serves both Apply and a single question.
+
+        `stop` is asked once a second whether the caller is still there: a client
+        that walked away leaves the wait sitting on the map, and the next line
+        the reader writes would be handed to nobody.
         """
         end = None if timeout is None else time.monotonic() + timeout
 
@@ -179,14 +186,17 @@ class State:
             self.last_seen = time.monotonic()
 
         try:
-            return self._wait_loop(test, end)
+            return self._wait_loop(test, end, stop)
         finally:
             with self.lock:
                 self.listeners -= 1
 
-    def _wait_loop(self, test, end):
+    def _wait_loop(self, test, end, stop):
         with self.lock:
             while True:
+                if stop is not None and stop():
+                    return None
+
                 found = test(self.snapshot())
                 if found is not None:
                     return found
@@ -275,18 +285,6 @@ class State:
         self._persist()
         return True
 
-    def mark_delivered(self):
-        """
-        Counts every line the reader has written as handed over.
-
-        A blocking call returns the lines itself, and without this the Stop hook
-        hands the same lines over again when the turn ends.
-        """
-        with self.lock:
-            self.delivered = len([m for m in self.chat if m["role"] == "you"])
-
-        self._persist()
-
     def resolve(self, node, note):
         """Marks a question settled, so the page stops asking for it."""
         with self.lock:
@@ -345,10 +343,20 @@ class State:
         self._persist()
 
     def _persist(self):
-        self.file().parent.mkdir(exist_ok=True)
-        self.file().write_text(
-            json.dumps(self.snapshot(), ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        """
+        Writes the state beside the file and renames it into place.
+
+        Two threads persist at once — a post and a drained inbox — and a half
+        written file reads back as an empty conversation, which hands the whole
+        log to Claude a second time.
+        """
+        with self.writing:
+            self.file().parent.mkdir(exist_ok=True)
+            temporary = self.file().with_suffix(".writing")
+            temporary.write_text(
+                json.dumps(self.snapshot(), ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            os.replace(temporary, self.file())
 
 
 class Board:
@@ -413,7 +421,7 @@ class Handler(BaseHTTPRequestHandler):
         Every endpoint that carries a conversation needs the name: the states of
         two maps differ in everything but the project they sit in.
         """
-        if not name:
+        if not isinstance(name, str) or not name:
             self.json_reply(400, {"error": "name the map: ?map=<name>"})
             return None
 
@@ -476,10 +484,16 @@ class Handler(BaseHTTPRequestHandler):
 
             messages = []
             for state in states:
-                # Draining the inbox is Claude reaching for the map, which is as
-                # good a sign of presence as answering.
+                fresh = state.inbox()
+                if not fresh:
+                    continue
+
+                # Draining the inbox is Claude reaching for this map, which is as
+                # good a sign of presence as answering. A map with nothing on it
+                # is not reached for, and saying otherwise puts Claude on a map
+                # nobody wrote to.
                 state.touch()
-                for message in state.inbox():
+                for message in fresh:
                     messages.append(dict(message, map=state.name))
 
             self.json_reply(200, {"messages": messages})
@@ -513,7 +527,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         try:
-            _, page = mapkit.build(source, root, coloured=True, stamp=self.map_stamp(name))
+            _, page = mapkit.build(source, root, coloured=True, stamp=self.map_stamp(name), name=name)
         except ValueError as error:
             problems = "".join(f"<li>{line}</li>" for line in str(error).splitlines())
             self.reply(422, f"<h1>{name} does not validate</h1><ul>{problems}</ul>")
@@ -596,6 +610,9 @@ class Handler(BaseHTTPRequestHandler):
 
         length = int(self.headers.get("Content-Length") or 0)
         if length > MAX_BODY:
+            # The body is never read, so the connection cannot carry another
+            # request after this one.
+            self.close_connection = True
             self.json_reply(413, {"error": "body too large"})
             return
 

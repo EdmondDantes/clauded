@@ -719,31 +719,6 @@
   .apply:not([disabled]):hover { filter: brightness(1.08); }
   .apply:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .thread { display: grid; gap: .4rem; max-height: 18rem; overflow-y: auto; }
-
-  .thread .msg {
-    display: grid;
-    gap: .15rem;
-    padding: .4rem .6rem;
-    font-size: var(--step-0);
-    border-radius: 8px;
-    max-width: 92%;
-  }
-
-  .thread .msg.you {
-    justify-self: end;
-    background: var(--accent-soft);
-    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  }
-
-  .thread .msg.claude {
-    justify-self: start;
-    background: var(--surface-sunk);
-    border: 1px solid var(--line);
-  }
-
-  .thread .msg.pending { opacity: .75; border-style: dashed; }
-
   .compose { display: flex; gap: .4rem; align-items: flex-end; }
 
   .compose textarea {
@@ -1278,7 +1253,7 @@
 
   /* One register for the mono caps that name a surface or a field. A label
      that needs another size is a label in the wrong place. */
-  .panel-kind, .pane-name, .layout-card .card-label, .record dt, .thread .msg .who {
+  .panel-kind, .pane-name, .layout-card .card-label, .record dt {
     font-family: "IBM Plex Mono", monospace;
     font-size: var(--step-micro);
     letter-spacing: .09em;
@@ -1493,10 +1468,12 @@ const BUILD = "dev";
 // it stands.
 const MAP_STAMP = "dev";
 
-// Which map this page is: the last part of /map/<name>, and the name every
-// request and every stored key carries. A project holds several maps, and they
-// share neither a conversation nor a window arrangement.
-const MAP_NAME = decodeURIComponent(location.pathname.split("/").pop() || "map");
+// Which map this page is: the name every request and every stored key carries.
+// A project holds several maps, and they share neither a conversation nor a
+// window arrangement. The server writes the name in; opened as a file, the
+// address is all there is to read it from.
+const SERVED_AS = "";
+const MAP_NAME = SERVED_AS || decodeURIComponent(location.pathname.split("/").pop() || "map");
 
 const KIND_LABEL = {
   aspect: "aspect",
@@ -2285,7 +2262,8 @@ function resend() {
 async function growMap() {
   let next;
   try {
-    next = await fetch(`/api/map/${MAP_NAME}`).then(response => response.ok ? response.json() : null);
+    next = await fetch(`/api/map/${encodeURIComponent(MAP_NAME)}`)
+      .then(response => (response.ok ? response.json() : null));
   } catch (error) {
     return false;
   }
@@ -2392,8 +2370,12 @@ function updateApply() {
   if (!button) return;
   // This button ends the round: until it is pressed the work goes on.
   const count = pendingCount();
-  const label = count ? `Finish · ${count} to hand over` : "Finish";
-  button.disabled = false;
+  // A round already handed over, with nothing written since, has nothing to
+  // hand over again: pressing Finish twice would replay the whole log.
+  const last = pending.chat[pending.chat.length - 1];
+  const closed = Boolean(last && last.kind === "finish") && count === 0;
+  const label = count ? `Finish · ${count} to hand over` : closed ? "Handed over" : "Finish";
+  button.disabled = closed;
   // Rewriting the same text on every poll made the button flicker.
   if (button.textContent !== label) button.textContent = label;
   button.title = "Hand the conversation over and end the round";
@@ -2407,15 +2389,15 @@ function updateApply() {
 async function applyPending() {
 
   const lines = [`# ${MAP.title}`];
-  for (const message of pending.chat) {
+  for (const message of pending.chat.filter(message => !message.applied)) {
     const about = message.about && byId.has(message.about) ? ` (${byId.get(message.about).title})` : "";
     lines.push(`- ${message.role}${about}: ${message.text}`);
   }
 
   const summary = lines.join("\n");
   const payload = {
-    map: MAP.title,
-    chat: pending.chat.map(({ role, text, about }) => ({ role, text, about })),
+    chat: pending.chat.filter(message => !message.applied)
+      .map(({ role, text, about }) => ({ role, text, about })),
     answers: lastWordPerNode(),
     summary
   };
@@ -2757,6 +2739,9 @@ if (location.protocol === "http:" || location.protocol === "https:") {
   // Said once when a new build is held back, so the reader knows why the page
   // has not reloaded itself.
   let held = false;
+  // Said once when the server stops answering about this map — renamed, deleted
+  // or served from another project — instead of polling in silence.
+  let lost = false;
   setInterval(async () => {
     if (ticking) return;
     ticking = true;
@@ -2764,6 +2749,19 @@ if (location.protocol === "http:" || location.protocol === "https:") {
       const from = seenId ? `&since=${encodeURIComponent(seenId)}` : "";
       const news = await fetch(`/api/updates?map=${encodeURIComponent(MAP_NAME)}${from}`)
         .then(response => response.json());
+
+      // The server knows this address and does not know this map: it was
+      // renamed or deleted under the open page, and nothing typed here will
+      // reach anyone until the page is pointed somewhere else.
+      if (news.error) {
+        if (!lost) {
+          lost = true;
+          toast(`The server no longer has this map: ${news.error}`);
+        }
+        return;
+      }
+
+      lost = false;
 
       // The map's own data changed — a node was added or settled while we
       // watched — so the graph on screen is out of date.
@@ -2814,12 +2812,13 @@ if (location.protocol === "http:" || location.protocol === "https:") {
             continue;
           }
 
+          // Whatever this page has written and not handed over is in its own
+          // store, so a line arriving from the server is history — including
+          // the summary Apply writes. Treating it as a draft would hand the
+          // whole log over again the next time Finish is pressed.
           pending.chat.push({
             id: message.id, role: message.role, text: message.text,
-            about: message.about, at: message.at, kind: message.kind,
-            // The line Apply writes is the round handed over, not a line waiting
-            // to be: counting it as pending would ask for it back at once.
-            applied: message.role === "you" && message.kind !== "finish" ? undefined : true
+            about: message.about, at: message.at, kind: message.kind, applied: true
           });
         }
 

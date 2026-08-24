@@ -2,7 +2,7 @@
 """MCP server for clauded: Claude asks on the map and waits for the answer there.
 
 Speaks JSON-RPC over stdin and stdout, one message per line, and runs the local
-map server in the same process. Four tools:
+map server in the same process. The tools:
 
     open_map          render a map and hand back its address
     open_questions    what is still open on the map, so the round has an end
@@ -234,19 +234,38 @@ class Session:
             return self.root
 
 
+# What a call says when the client drops it. Nothing was taken from the map, so
+# whatever is written there is still waiting for the next call or the Stop hook.
+DROPPED = "The call was dropped before anything was said. Nothing was taken off the map."
+
+# The tool calls this process is serving, by request id. Claude Code drops a
+# call the moment anything is typed in the terminal, and a wait that does not
+# hear about it sits on the map and takes the reader's next line with it.
+WAITS = {}
+WAITS_LOCK = threading.Lock()
+SERVING = threading.local()
+
+
+def cancelled():
+    """True when the client has given up on the call this thread is serving."""
+    token = getattr(SERVING, "token", None)
+    return bool(token and token.get("cancelled"))
+
+
 class NoMap(Exception):
     """No map was named and none is open, so a tool has nothing to work on."""
 
 
-def state_of(session, args):
+def named_map(session, args):
     """
-    Returns (state, url, name) for the map a tool works on.
+    Returns (name, path) of the map a tool acts on.
 
     The map is the one the tool names, the one opened last, or — in a project
     that holds a single map — that one. Raises NoMap when none of the three
-    answers, because a conversation without a map has nowhere to go.
+    answers: every tool here works on a map, and guessing which is worse than
+    saying so. Working on a map makes it the current one, so a reply that names
+    no map lands where the question was asked rather than where open_map was.
     """
-    board, url = session.ensure()
     known = maps.maps_in(session.root)
     name = args.get("name") or session.last_map
     if name is None and len(known) == 1:
@@ -256,6 +275,14 @@ def state_of(session, args):
         listing = ", ".join(known) or "none"
         raise NoMap(f"Open a map first with open_map. Maps under {session.root}: {listing}.")
 
+    session.last_map = name
+    return name, known[name]
+
+
+def state_of(session, args):
+    """Returns (state, url, name) for the map a tool works on. See named_map."""
+    board, url = session.ensure()
+    name, _ = named_map(session, args)
     return board.state(session.root, name), url, name
 
 
@@ -265,9 +292,15 @@ def tool_open_map(session, args):
     # A path to the map file names its project too: dev/design/<name>.map.yaml
     # sits three levels under the root.
     path = Path(name).expanduser()
-    if path.suffix in (".yaml", ".yml") and path.is_file():
-        session.use(path.resolve().parent.parent.parent)
-        name = path.name[:-len(".map.yaml")]
+    if path.name.endswith(".map.yaml") and path.is_file():
+        # Only a file at <root>/dev/design/<name>.map.yaml names its project.
+        # Taking three levels off any other path moves the running server's root
+        # to a directory that holds no maps, and every open page goes deaf.
+        target = path.resolve()
+        root = target.parent.parent.parent
+        if root / "dev" / "design" / target.name == target:
+            session.use(root)
+        name = target.name[:-len(".map.yaml")]
     else:
         session.use(args.get("project"))
 
@@ -301,21 +334,21 @@ FINISHED = (
 )
 
 
-def end_of_round(state):
-    """True when the round has just ended; takes the signal so it is told once."""
-    return state.take_end()
+def unread(snapshot):
+    """
+    The reader's lines the server has not handed to Claude yet, or None.
 
-
-def said_by_reader(snapshot, seen):
-    """The reader's messages beyond the ones already counted."""
+    The count comes from the state, not from what this call saw when it started:
+    a line written while Claude was working belongs to the next call that asks,
+    and counting from the start of the call would step over it.
+    """
     mine = [m for m in snapshot["chat"] if m["role"] == "you"]
-    return mine[seen:] or None
+    return mine[snapshot["delivered"]:] or None
 
 
 def tool_open_questions(session, args):
     state, _, name = state_of(session, args)
     source = maps.maps_in(session.root)[name]
-
     data = mapkit.load(source)
     settled = set(state.snapshot()["resolved"])
     questions = [
@@ -329,14 +362,7 @@ def tool_open_questions(session, args):
 
 def tool_add_node(session, args):
     session.ensure()
-    known = maps.maps_in(session.root)
-    name = args.get("name") or session.last_map
-    source = known.get(name)
-
-    if source is None:
-        listing = ", ".join(known) or "none"
-        return f"No map named {name}. Maps under {session.root}: {listing}."
-
+    _, source = named_map(session, args)
     data = mapkit.load(source)
     seen = mapkit.map_stamp(source)
     if any(node["id"] == args["id"] for node in data["nodes"]):
@@ -373,20 +399,14 @@ def tool_add_node(session, args):
 
 def open_map_file(session, args):
     """
-    Returns (path, data, stamp) for the map a tool names, or (None, message, None).
+    Returns (path, data, stamp) for the map a tool names.
 
     The stamp is taken with the read: writing quotes it back, so a file someone
-    else changed in between is not overwritten.
+    else changed in between is not overwritten. Raises NoMap when no map is named
+    and none is open.
     """
     session.ensure()
-    known = maps.maps_in(session.root)
-    name = args.get("name") or session.last_map
-    source = known.get(name)
-
-    if source is None:
-        listing = ", ".join(known) or "none"
-        return None, f"No map named {name}. Maps under {session.root}: {listing}.", None
-
+    _, source = named_map(session, args)
     return source, mapkit.load(source), mapkit.map_stamp(source)
 
 
@@ -403,9 +423,6 @@ def write_map(source, data, seen):
 
 def tool_edit_node(session, args):
     source, data, seen = open_map_file(session, args)
-    if source is None:
-        return data
-
     node = next((n for n in data["nodes"] if n["id"] == args["id"]), None)
     if node is None:
         return f"{args['id']} is not on this map."
@@ -427,9 +444,6 @@ def tool_edit_node(session, args):
 
 def tool_remove_node(session, args):
     source, data, seen = open_map_file(session, args)
-    if source is None:
-        return data
-
     node_id = args["id"]
     if not any(n["id"] == node_id for n in data["nodes"]):
         return f"{node_id} is not on this map."
@@ -460,7 +474,6 @@ def tool_ask_on_map(session, args):
     node = args["node"]
     timeout = float(args.get("timeout_seconds", 900))
 
-    seen = len([m for m in state.snapshot()["chat"] if m["role"] == "you"])
     state.update(focus={"node": node, "note": args.get("note", "")})
 
     def answer(snapshot):
@@ -468,45 +481,55 @@ def tool_ask_on_map(session, args):
         # writes is a summary of the round, not an answer to this question.
         if snapshot["ended"]:
             return "ended"
-        return said_by_reader(snapshot, seen)
+        return unread(snapshot)
 
-    fresh = state.wait_for(answer, timeout)
+    fresh = state.wait_for(answer, timeout, stop=cancelled)
 
     if fresh == "ended":
-        end_of_round(state)
-        state.mark_delivered()
+        state.take_end()
+        state.inbox()
         state.update(focus=None)
         return FINISHED
 
     if fresh is None:
         state.update(focus=None)
+        if cancelled():
+            return DROPPED
         return f"Nothing said about {node} within {timeout:.0f}s. It is still open on the map at {url}/map/{name}."
 
-    state.mark_delivered()
-    return json.dumps({"asked": node, "said": [{"text": m["text"], "about": m["about"]} for m in fresh]}, ensure_ascii=False)
+    # Taking the lines through the inbox is what marks them handed over, so the
+    # Stop hook does not deliver them a second time when the turn ends.
+    said = state.inbox()
+    if not said:
+        state.update(focus=None)
+        return f"The lines about {node} went to this turn's Stop hook instead. Answer what it gave you."
+
+    return json.dumps({"asked": node, "said": [{"text": m["text"], "about": m["about"]} for m in said]}, ensure_ascii=False)
 
 
 def tool_wait_for_message(session, args):
     state, url, name = state_of(session, args)
     timeout = float(args.get("timeout_seconds", 1500))
-    seen = len([m for m in state.snapshot()["chat"] if m["role"] == "you"])
 
     def next_line(snapshot):
         if snapshot["ended"]:
             return "ended"
-        return said_by_reader(snapshot, seen)
+        return unread(snapshot)
 
-    fresh = state.wait_for(next_line, timeout)
+    fresh = state.wait_for(next_line, timeout, stop=cancelled)
     if fresh == "ended":
-        end_of_round(state)
-        state.mark_delivered()
+        state.take_end()
+        state.inbox()
         return FINISHED
     if fresh is None:
-        return f"Nothing said on the map within {timeout:.0f}s. It is still open at {url}/map/{name}."
+        return DROPPED if cancelled() else f"Nothing said on the map within {timeout:.0f}s. It is still open at {url}/map/{name}."
 
-    state.mark_delivered()
+    said = state.inbox()
+    if not said:
+        return "The lines went to this turn's Stop hook instead. Answer what it gave you."
+
     return json.dumps(
-        [{"text": m["text"], "about": m["about"], "at": m["at"]} for m in fresh],
+        [{"text": m["text"], "about": m["about"], "at": m["at"]} for m in said],
         ensure_ascii=False,
     )
 
@@ -559,12 +582,17 @@ def tool_wait_for_apply(session, args):
     before = state.snapshot()["applied"]
 
     applied = state.wait_for(
-        lambda snap: snap["applied"] if snap["applied"] != before else None, timeout
+        lambda snap: snap["applied"] if snap["applied"] != before else None, timeout, stop=cancelled
     )
 
     if applied is None:
-        return f"Apply was not pressed within {timeout:.0f}s. The map is still open at {url}/map/{name}."
+        return DROPPED if cancelled() else f"Apply was not pressed within {timeout:.0f}s. The map is still open at {url}/map/{name}."
 
+    # The draft is the end of the round, so the signal is spent here as well:
+    # otherwise the next wait answers this round's end at once, and the Stop
+    # hook announces it a second time.
+    state.take_end()
+    state.inbox()
     return json.dumps(applied, ensure_ascii=False, indent=2)
 
 
@@ -624,7 +652,23 @@ def handle(session, message):
     elif method == "tools/list":
         result = {"tools": TOOLS}
     elif method == "tools/call":
-        result = call_tool(session, message.get("params") or {})
+        token = {"cancelled": False}
+        with WAITS_LOCK:
+            WAITS[request_id] = token
+        SERVING.token = token
+        try:
+            result = call_tool(session, message.get("params") or {})
+        finally:
+            SERVING.token = None
+            with WAITS_LOCK:
+                WAITS.pop(request_id, None)
+    elif method == "notifications/cancelled":
+        wanted = (message.get("params") or {}).get("requestId")
+        with WAITS_LOCK:
+            token = WAITS.get(wanted)
+        if token is not None:
+            token["cancelled"] = True
+        return None
     elif method in ("ping",):
         result = {}
     elif request_id is None:
@@ -638,9 +682,28 @@ def handle(session, message):
 
 
 def main():
+    """
+    Reads requests and answers them, each on its own thread.
+
+    The waiting tools block for as long as a round takes, and served in turn they
+    would hold up every other call in the session — including the ones a second
+    agent makes on the same map. Answers may come back out of order, which
+    JSON-RPC allows; one lock keeps them from interleaving on the wire.
+    """
     root = Path.cwd()
     port = DEFAULT_PORT
     session = Session(root, port)
+    wire = threading.Lock()
+
+    def serve(message):
+        answer = handle(session, message)
+        if answer is None:
+            return
+        with wire:
+            sys.stdout.write(json.dumps(answer, ensure_ascii=False) + "\n")
+            sys.stdout.flush()
+
+    working = []
 
     for line in sys.stdin:
         line = line.strip()
@@ -652,10 +715,19 @@ def main():
         except json.JSONDecodeError:
             continue
 
-        answer = handle(session, message)
-        if answer is not None:
-            sys.stdout.write(json.dumps(answer, ensure_ascii=False) + "\n")
-            sys.stdout.flush()
+        thread = threading.Thread(target=serve, args=(message,), name="clauded-rpc", daemon=True)
+        working.append(thread)
+        thread.start()
+        working = [alive for alive in working if alive.is_alive()]
+
+    # Closed input means the client is gone: every wait it left behind is
+    # cancelled, and the answers already on their way get a moment to land.
+    with WAITS_LOCK:
+        for token in WAITS.values():
+            token["cancelled"] = True
+
+    for thread in working:
+        thread.join(timeout=2)
 
 
 if __name__ == "__main__":

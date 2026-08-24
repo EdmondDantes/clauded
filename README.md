@@ -1,13 +1,14 @@
 # clauded
 
-Interactive design and architecture maps for Claude Code: a graph of the
-records a project already keeps, rendered as one self-contained page you can
-walk through, answer on, and hand back to Claude.
+clauded turns a project's own records into a graph you can walk, answer on, and
+hand back to Claude. It is a Claude Code plugin: a local server that renders the
+graph, an MCP server that lets a session ask questions on it and wait for the
+answers, and a Stop hook that carries what you wrote back into the session even
+when nothing was waiting.
 
-A map is derived. Knowledge stays in `dev/DECISIONS.md`, `dev/ARCHITECTURE.md`
-and `dev/PLAN.md`; the map shows it as a graph and is rebuilt from those files
-whenever they change. The rules that govern when a map is worth building live in
-the `working-with-edmond` skill, rule 27.
+A map is derived. The knowledge stays in `dev/DECISIONS.md`, `dev/ARCHITECTURE.md`
+and `dev/PLAN.md`; the map is generated from them and can be thrown away. When
+those files change, the map is rebuilt rather than edited.
 
 ## Install
 
@@ -16,8 +17,9 @@ the `working-with-edmond` skill, rule 27.
 /plugin install clauded@clauded
 ```
 
-The plugin brings the `/map` command and an MCP server named `clauded`. Python 3
-with PyYAML is required; Pygments is optional and only colours cited code.
+Python 3 and PyYAML are required. Pygments is optional and only colours the code
+a node cites. The plugin brings the `map` skill, the MCP server named `clauded`
+and the Stop hook; nothing listens outside 127.0.0.1.
 
 ## Open a map
 
@@ -25,94 +27,171 @@ with PyYAML is required; Pygments is optional and only colours cited code.
 python3 server/serve.py --root . --open <name>
 ```
 
-The server renders the page on each request, so an edit to the YAML shows up on
-reload. It listens on 127.0.0.1 only, colours the cited code, and takes back
-what you do on the page: the selected node and, on Apply, the answers.
+The server reads `dev/design/<name>.map.yaml` and renders the page on every
+request, so an edit to the YAML shows on reload. With no `--open` it prints its
+address and lists the maps it found.
 
-The YAML is the source and belongs in git. Generated pages do not: nothing in
-`dev/design/` is committed but the `.map.yaml` files.
+Rendering refuses a map whose node lacks a required field, whose id repeats,
+whose edge names a node that is not there, or which cites a file that is
+missing. All four would look on the page like a record that exists.
 
-For a page to publish or to read without the server:
+For a page to publish, or to read without the server:
 
 ```
 python3 tools/build-map.py dev/design/<name>.map.yaml --root . -o /tmp/<name>.html
 ```
 
-That snapshot shows cited code as plain text — a published artifact cannot load
-a highlighter, so it does without one.
+That snapshot shows cited code as plain text: a published artifact cannot load a
+highlighter.
 
-Rendering refuses a map whose node lacks a required field, whose id repeats,
-whose edge names a node that is not there, or which cites a file that is
-missing — all four look on the page like a record that exists.
+## The map file
+
+One YAML file per map, in `dev/design/`. The `spec` block says what this map's
+words mean — two maps in a project may use different vocabularies.
+
+```yaml
+title: Payments — design map
+source: dev/DECISIONS.md · 2026-08-24
+spec:
+  nodes: aspect · question · decision · rejected
+  sources: [dev/DECISIONS.md]
+  edge: belongs to aspect · answers question
+nodes:
+  - id: a-refunds
+    kind: aspect
+    title: Refunds
+    body: What a refund does to a settled invoice.
+    origin: dev/DECISIONS.md, 2026-08-24
+  - id: q-partial
+    kind: question
+    status: open
+    title: Are partial refunds allowed?
+    body: A refund smaller than the invoice leaves a balance nobody owns.
+    origin: open, 2026-08-24
+    options: [yes, no, only before settlement]
+    refs:
+      - file: src/Payments/Refund.php
+        lines: 12-40
+edges:
+  - [a-refunds, q-partial, holds]
+```
+
+| field | what it holds |
+|---|---|
+| `id` | unique within the map; edges and tools name it |
+| `kind` | `aspect`, `question`, `decision`, `rejected` — or `module`, `knowledge`, `dependency` for an architecture map |
+| `title`, `body` | one line, then the record itself |
+| `origin` | which file and place the record came from |
+| `why`, `cost`, `status` | written when the source has them |
+| `options` | the alternatives a question names |
+| `refs` | files to cite; the fragment is copied into the page as it renders |
+
+An aspect groups the nodes under it, gives them their colour, and can be dropped
+from the view with its whole subtree.
 
 ## What the page does
 
-- **Walk it.** Click a node to read the full record; its neighbours stay lit and
-  everything else dims. Aspects carry their own colour and can be dropped from
-  the view and brought back from the strip at the top.
-- **Talk on it.** One conversation for the whole map, in its own column. What
-  you select becomes the subject of the next line, and each line shows the
-  subject it had; Claude selects a node too, when the answer is due there.
+- **Walk it.** Click a node to read its record; its neighbours stay lit and the
+  rest dims. The strip at the top drops an aspect from the view and brings it
+  back.
+- **Talk on it.** One conversation for the whole map. Whatever is selected
+  becomes the subject of the next line, and each line carries the subject it had.
+  Claude selects a node too, when the answer is due there.
 - **One question at a time.** The button on the strip hands Claude the mode and
-  points it at the first open question; the questions then come one by one in
-  the conversation, and each is settled on the map before the next is asked.
-- **Read the code.** A node can cite files; the fragment is copied into the page
-  as it is rendered and opens in a window, coloured when the server rendered it.
-- **Apply.** Nothing leaves the page until Apply is pressed. Without the plugin
-  running, Apply copies the threads as text for you to paste into the
-  conversation; with it, they go straight to the session. Finish ends the round:
-  the log marks the handover, and Claude is told the round is over wherever it
-  is — in a call blocked on the map, or at the end of its turn.
-- **Several maps.** A project can hold more than one, and the title in the
-  header lists them. Each keeps its own conversation, its own settled marks and
-  its own window arrangement.
+  points it at the first open question. The questions then arrive one by one, and
+  each is settled on the map before the next is asked.
+- **Read the code.** A node that cites a file opens it in a window, on the cited
+  lines, coloured when the server rendered it.
+- **Arrange it.** The card on the dock offers six arrangements; a handle between
+  the panes resizes them, and either pane folds from its own head. The
+  arrangement is per map and stays in the browser.
+- **Finish.** Nothing leaves the page until Finish is pressed. With the plugin
+  running the draft goes straight to the session; without it, the summary goes to
+  the clipboard. The log marks the handover, and the button will not hand the
+  same round over twice.
 
-Answers survive a reload through the browser's own storage and never travel
-anywhere on their own.
+Lines you have written survive a reload through the browser's own storage, and
+travel nowhere on their own.
 
 ## With Claude
 
-The plugin carries an MCP server, so a session can work on the map instead of
-in the chat:
+The plugin carries an MCP server, so a session works on the map instead of in
+the chat:
 
 | tool | what it does |
 |---|---|
 | `open_map` | render a map and hand back its address |
 | `open_questions` | what is still open on it, so the round has an end |
-| `add_node` | write a new node into the map while the talk goes on |
+| `add_node` | write a new node while the talk goes on |
 | `edit_node` | change what a node says |
 | `remove_node` | take a node off the map when it turned out wrong |
-| `read_state` | the selected node and the conversation as it stands |
 | `select_on_map` | point at a node, making it the subject, without waiting |
+| `read_state` | the selection, the conversation and what was handed over |
 | `ask_on_map` | point at one question and block until something is said |
-| `wait_for_message` | block until anything is written anywhere on the map |
-| `reply_on_map` | write a reply into a node's thread |
-| `resolve_on_map` | mark a question settled, so the map shows it closed |
-| `wait_for_apply` | block until Apply hands the whole draft over |
+| `wait_for_message` | block until anything is written on the map |
+| `reply_on_map` | write a reply into the conversation |
+| `resolve_on_map` | settle a question, on the map and in the file behind it |
+| `wait_for_apply` | block until Finish hands the whole draft over |
+
+The round runs: `open_map`, then `ask_on_map` for one question, then
+`reply_on_map` and `resolve_on_map` when it is settled, then the next question,
+and `wait_for_apply` at the end. Work starts on what Finish returns and not
+before.
 
 `ask_on_map` and `wait_for_message` block on purpose: while a question is open,
-no work starts. The page picks the pointer up within a second and a half, opens
-that question and says who is waiting.
+no work starts. A blocking call is not what keeps the conversation alive, though
+— typing in the terminal interrupts the turn and the call with it. The Stop hook
+does that job: before a turn ends it drains the inbox of every open map and
+blocks the stop, so Claude answers whatever was written, whether or not it was
+waiting.
 
-Every tool takes `name` and falls back to the map opened last, so two maps in
-one project never mix.
+Finish reaches Claude as one signal wherever it is — a blocked call, or the Stop
+hook at the end of a turn — and is said once: whoever hears it first is the one
+told the round is over. The draft is in `applied`, which `read_state` shows and
+`wait_for_apply` returns.
 
-A blocking call is not how the conversation stays alive: typing in the terminal
-interrupts the turn and the call with it. The plugin's Stop hook does that job —
-before a turn ends it drains the inbox of every open map and blocks the stop, so
-Claude answers whatever was written, whether or not it was waiting. Finish
-travels the same way and is said once: whoever hears it first — a blocked call
-or the hook — is the one told the round is over.
+## Several maps in one project
+
+Every `.map.yaml` in `dev/design/` is a map of its own, and the title in the
+page's header lists them all. Each keeps its own conversation, its own settled
+marks and its own window arrangement, in `.clauded/<map>.state.json`. Every tool
+takes `name` and falls back to the map opened last.
+
+## Tests
+
+```
+python3 tests/run.py
+```
+
+It builds a throwaway project of two maps in a temporary directory, starts the
+real server on port 8899 and drives the real MCP handlers, then checks the
+conditions `dev/PLAN.md` closes its steps on: state that stays per map, a
+conversation that travels bounded, a restart that remembers what was handed
+over, and Finish arriving as one signal. It writes nothing outside the temporary
+directory.
+
+## What it does not do
+
+- **One server per session.** Each session starts its own on the first free port
+  from 8791 and records the last one in `~/.clauded/server.json`, which the Stop
+  hook reads. Two sessions at once, and the hook follows whichever started last.
+- **Nothing wakes an idle session.** A session that is not in a turn hears
+  nothing until its next turn ends; the Stop hook is the reverse channel, and a
+  channel that pushes into an idle session does not exist here yet.
+- **Citations are line numbers.** An edit above a cited range moves it, and the
+  map keeps pointing where the code used to be.
 
 ## Layout
 
 ```
-web/map-template.html    the page: renderer, panel, walkthrough, code window
-tools/mapkit.py          read, validate, inline cited code, colour, render
-tools/build-map.py       one map to one HTML file, for publishing
-server/maps.py           the server itself: renders, holds the threads, waits
-server/serve.py          run the server on its own, without Claude
-server/mcp.py            the MCP side: ask, reply, wait
-skills/map/              the slash command that opens a map
-dev/design/clauded.map.yaml   this project's own design map
+web/map-template.html        the page: graph, record, conversation, code window
+tools/mapkit.py              read, validate, inline cited code, colour, render
+tools/build-map.py           one map to one HTML file, for publishing
+server/maps.py               the server: renders, holds the conversations, waits
+server/serve.py              run the server on its own, without Claude
+server/mcp.py                the MCP side: ask, reply, wait
+hooks/map-inbox.py           the Stop hook that carries the map back to Claude
+skills/map/SKILL.md          how Claude builds a map and runs a round on it
+tests/run.py                 the checks behind the plan's closed steps
+dev/design/*.map.yaml        this project's own maps
 ```

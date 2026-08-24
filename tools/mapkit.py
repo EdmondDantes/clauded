@@ -211,7 +211,7 @@ def build_stamp(template=None):
     return str(int(path.stat().st_mtime))
 
 
-def render(data, template=None, stamp=None):
+def render(data, template=None, stamp=None, name=None):
     """
     Substitutes the MAP literal, the title, the build stamp and the map's own
     stamp into the template.
@@ -220,12 +220,18 @@ def render(data, template=None, stamp=None):
     it with what the server reports and refetches when the two differ, so it has
     to be the same string the server would answer with; left out, the page waits
     for the first poll to tell it where it stands.
+
+    `name` is the map's name on the server. Without it the page reads its name
+    off the address, and an address that ends in a slash leaves it talking about
+    a map that does not exist.
     """
     path = Path(template or TEMPLATE)
     text = path.read_text(encoding="utf-8")
     text = text.replace('const BUILD = "dev";', f'const BUILD = "{build_stamp(path)}";', 1)
     if stamp:
         text = text.replace('const MAP_STAMP = "dev";', f'const MAP_STAMP = "{stamp}";', 1)
+    if name:
+        text = text.replace('const SERVED_AS = "";', f'const SERVED_AS = "{name}";', 1)
     # A "</script>" anywhere in the data would close the tag the literal sits in.
     literal = "const MAP = " + json.dumps(data, ensure_ascii=False, indent=2).replace("</", "<\\/") + ";"
     page, count = re.subn(r"const MAP = \{.*?\n\};", lambda _: literal, text, count=1, flags=re.S)
@@ -237,7 +243,7 @@ def render(data, template=None, stamp=None):
     return re.sub(r"<title>.*?</title>", f"<title>{html.escape(data['title'])}</title>", page, count=1, flags=re.S)
 
 
-def build(path, root=".", coloured=False, template=None, stamp=None):
+def build(path, root=".", coloured=False, template=None, stamp=None, name=None):
     """Loads, checks and renders one map. Raises ValueError listing every problem."""
     data = load(path)
     problems = validate(data)
@@ -246,4 +252,4 @@ def build(path, root=".", coloured=False, template=None, stamp=None):
     if problems:
         raise ValueError("\n".join(problems))
 
-    return data, render(data, template, stamp)
+    return data, render(data, template, stamp, name)

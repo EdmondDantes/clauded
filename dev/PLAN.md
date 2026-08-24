@@ -229,12 +229,47 @@ the same end, and no line is handed over twice.
         summary under one lock, so a call woken by the summary cannot answer a
         finished round as a running one; the message carries kind "finish".
         take_end hands the flag to the first caller and clears it, the inbox
-        clears it when it delivers the finish, and a blocking call marks what it
-        returned as delivered so the hook does not repeat it. POST /api/end is
+        clears it when it delivers the finish, and wait_for_apply spends both when
+        it returns the draft. A call takes its lines through the inbox, so the
+        hook never repeats what it already handed over. POST /api/end is
         gone — nothing called it — and the .end-talk style with it.
         The page marks the handover with a rule across the log and leaves the
         summary out — it repeats the lines above it — and the finish no longer
         counts as a line waiting to be handed over.
+
+## S11 — What the reviews of 2026-08-24 found  [in progress]
+
+A critic and a code reviewer read the per-map split and the round's end. Both
+named the same two defects, and both were reproduced before anything was
+changed. Fixed: a blocking call counted every line the reader had written as
+handed over, so a line written while Claude worked reached nobody — the inbox is
+now the one ledger, and a call takes only what it returns; `wait_for_apply` left
+the end unspent, so the next wait answered a round that closed minutes ago; the
+JSON-RPC loop served one request at a time, so a blocking call froze every other
+tool in the session — each request now runs on its own thread, and a call the
+client drops (`notifications/cancelled`, or closed input) stops waiting instead
+of taking the next line with it; a page served at `/map/<name>/` read its name
+off the address and talked about a map that does not exist — the name is baked
+in like the stamp; a reload past 200 lines brought handed-over lines back as an
+unsent draft; the state file was written without a rename, and a torn file reads
+as an empty conversation; `Finish` could be pressed twice and replay the round;
+`add_node` and its neighbours each answered "which map" differently.
+
+`tests/run.py` holds the checks behind every closed step above, against the real
+server and the real MCP handlers.
+
+- [ ] S11.1 One address file for every session
+      done: two sessions at once, and each one's Stop hook reaches its own server
+      tier: T2 · role: —
+      note: `maps.start` writes ~/.clauded/server.json unconditionally and the
+        hook reads that one file, so the second session to start takes the
+        channel from the first. Both sessions of one project also write the same
+        state files, last write winning.
+- [ ] S11.2 An upgrade keeps what the old page and the old server held
+      done: a conversation written before the per-map split is still there after it
+      tier: T1 · role: —
+      note: .clauded/state.json and the localStorage key `map-chat` are orphaned
+        by the split; nothing reads or removes them.
 
 ## S4 — The mode in the skill
 
