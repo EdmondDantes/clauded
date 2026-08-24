@@ -76,18 +76,16 @@ nodes:
   cost: Two maps of the same project can disagree about what a node is; nothing checks that.
   origin: session decision, 2026-08-23
 - id: q-panel
-  kind: question
-  status: open
+  kind: decision
+  status: decided
   title: 'Long text: side panel or popover?'
   body: A node carries several paragraphs — the decision, its reason, its price. Where does
     that text appear?
-  why: Panel keeps the graph in place and holds long text, but eats a fifth of the screen.
-    A popover keeps the graph full-width and dies on long text.
+  why: 'Panel keeps the graph in place and holds long text, but eats a fifth of the screen.
+    A popover keeps the graph full-width and dies on long text. Settled on the map: The side
+    panel. The page has held the record in its own column since the first build, and no popover
+    was ever written'
   origin: open, this session
-  options:
-  - side panel
-  - popover
-  - both, panel by default
   refs:
   - file: web/map-template.html
     anchor: function renderPanel(node, neighbours) {
@@ -101,16 +99,14 @@ nodes:
     data as a literal.'
   origin: open, this session
 - id: q-trigger
-  kind: question
-  status: open
+  kind: decision
+  status: decided
   title: How the mode is entered
   body: A trigger phrase, a slash command, or an entry in the skill table that fires on the
     word `map`.
   origin: open, this session
-  options:
-  - slash command
-  - trigger phrase
-  - skill pointer only
+  why: 'Settled on the map: A skill: the plugin brings clauded:map, which opens the map and
+    holds the rules of a round; no trigger phrase and no slash command of its own'
 - id: r-plantuml
   kind: rejected
   status: rejected
@@ -171,6 +167,21 @@ nodes:
   cost: Switching between the citations of one node means going back to the record. Worth
     revisiting at a node that cites five.
   status: rejected
+- id: d-map-holds-answers
+  kind: decision
+  title: The map's file is where a design decision is written
+  body: A question settled on the map is written into the map's own YAML as the decision it
+    became, and that file — in git, reviewed as text — is the record. No second document repeats
+    it.
+  origin: session 2026-08-24, after S12.2 stalled on a document that does not exist
+  why: 'd-derived was read as "a node may hold nothing a document does not say", which left
+    every question settled in code impossible to close: the answer had nowhere to live. The
+    map''s YAML is a repository file that resolve_on_map already writes, so the answer has
+    a home; what d-derived is really about is that the map does not invent questions, and
+    that stands.'
+  cost: 'A design decision is found on the map rather than in a document a stranger would
+    open first. An architecture map stays derived whole: it holds no answers of its own.'
+  status: decided
 edges:
 - - a-contract
   - d-derived
@@ -210,4 +221,7 @@ edges:
   - holds
 - - a-interaction
   - r-code-tabs
+  - holds
+- - a-contract
+  - d-map-holds-answers
   - holds
