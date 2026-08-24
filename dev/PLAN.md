@@ -5,8 +5,6 @@ collects questions onto a map and does nothing until Edmond presses Apply.
 
 ## Fog
 
-- Whether the reverse channel should be a blocking tool call, a `claude/channel`
-  push, or both side by side.
 - What the architecture map cites when a module has no single file.
 - Whether a map should ever be regenerated automatically, or only on request.
 - Citing code by line number goes stale with the first edit above it; an anchor
@@ -36,6 +34,10 @@ collects questions onto a map and does nothing until Edmond presses Apply.
 
 - [x] S3.1 Decide blocking call, channel, or both
       done: the blocking call carries the work; a channel stays open as a later addition
+      note: settled twice over. The blocking call carries a round, the Stop hook
+        carries what was written when no call is waiting, and both work; a push
+        into an idle session waits for the CLI to offer one (S3.8). This is the
+        whole answer, and the question left the Fog on 2026-08-24.
       handoff: a channel needs --channels and an Anthropic allowlist, the blocking call needs neither
 - [x] S3.2 MCP server over stdio, standard library only
       done: initialize, tools/list and tools/call answered over stdio in one run
